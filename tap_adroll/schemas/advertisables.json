@@ -1,0 +1,288 @@
+{
+  "type": ["null", "object"],
+  "additionalProperties": true,
+  "properties": {
+    "show_web_dynamic_ads": {
+      "type": ["null", "boolean"]
+    },
+    "default_utm": {
+      "type": ["null", "string"]
+    },
+    "country_code": {
+      "type": ["null", "string"]
+    },
+    "approval_state": {
+      "type": ["null", "string"]
+    },
+    "source": {
+      "type": ["null", "string"]
+    },
+    "marketo_api_endpoint": {
+      "type": ["null", "string"]
+    },
+    "account_is_prepaid": {
+      "type": ["null", "boolean"]
+    },
+    "is_constant_contact_syncing": {
+      "type": ["null", "boolean"]
+    },
+    "saleser": {
+      "type": ["null", "string"]
+    },
+    "marketo_secret_key": {
+      "type": ["null", "string"]
+    },
+    "ops": {
+      "type": ["null", "string"]
+    },
+    "click_through_conversion_window": {
+      "type": ["null", "integer"]
+    },
+    "is_active": {
+      "type": ["null", "boolean"]
+    },
+    "view_through_conversion_window": {
+      "type": ["null", "integer"]
+    },
+    "fbx_account_id": {
+      "type": ["null", "integer"]
+    },
+    "page_access_request_status": {
+      "type": ["null", "string"]
+    },
+    "iab1_category_id": {
+      "type": ["null", "integer"]
+    },
+    "name": {
+      "type": ["null", "string"]
+    },
+    "has_offsite_pixels": {
+      "type": ["null", "boolean"]
+    },
+    "show_dpa": {
+      "type": ["null", "boolean"]
+    },
+    "blacklisted_sites": {
+      "type": ["null", "array"],
+      "items": {
+        "type": ["null", "string"]
+      },
+      "additionalItems": true
+    },
+    "fbx_page_url": {
+      "type": ["null", "string"]
+    },
+    "path_name": {
+      "type": ["null", "string"]
+    },
+    "status": {
+      "type": ["null", "string"]
+    },
+    "ip_address_exclusions": {
+      "type": ["null", "array"],
+      "items": {
+        "type": ["null", "string"]
+      },
+      "additionalItems": true
+    },
+    "uhura_enabled": {
+      "type": ["null", "boolean"]
+    },
+    "optimizer_email": {
+      "type": ["null", "string"]
+    },
+    "is_marketo_syncing": {
+      "type": ["null", "boolean"]
+    },
+    "attached_users": {
+      "type": ["null", "array"],
+      "items": {
+        "type": ["null", "integer"]
+      },
+      "additionalItems": true
+    },
+    "is_kpi_eligible": {
+      "type": ["null", "boolean"]
+    },
+    "zvelo_category_name": {
+      "type": ["null", "string"]
+    },
+    "constant_contact_oauth_url": {
+      "type": ["null", "string"]
+    },
+    "has_created_campaign": {
+      "type": ["null", "boolean"]
+    },
+    "instagram_actor_id": {
+      "type": ["null", "integer"]
+    },
+    "iab2_category_id": {
+      "type": ["null", "integer"]
+    },
+    "created_date": {
+      "type": ["null", "string"]
+    },
+    "is_managed": {
+      "type": ["null", "boolean"]
+    },
+    "admin_page_permission": {
+      "type": ["null", "boolean"]
+    },
+    "self_serve_prospecting_enabled": {
+      "type": ["null", "boolean"]
+    },
+    "safari_add_on_theme": {
+      "type": ["null", "string"]
+    },
+    "is_suspended": {
+      "type": ["null", "boolean"]
+    },
+    "revshare_view_percent": {
+      "type": ["null", "number"]
+    },
+    "fb_offsite_pixels_tos_accepted": {
+      "type": ["null", "boolean"]
+    },
+    "has_privacy_policy": {
+      "type": ["null", "boolean"]
+    },
+    "account_country_code": {
+      "type": ["null", "string"]
+    },
+    "rollcrawl_enabled": {
+      "type": ["null", "boolean"]
+    },
+    "reskin_enabled": {
+      "type": ["null", "boolean"]
+    },
+    "fbx_page_id": {
+      "type": ["null", "string"]
+    },
+    "default_homepage": {
+      "type": ["null", "string"]
+    },
+    "rollworks_self_serve_ads": {
+      "type": ["null", "boolean"]
+    },
+    "enable_customer_multi_dur_segs": {
+      "type": ["null", "boolean"]
+    },
+    "is_abm_customer": {
+      "type": ["null", "boolean"]
+    },
+    "is_b2b": {
+      "type": ["null", "boolean"]
+    },
+    "account": {
+      "type": ["null", "string"]
+    },
+    "account_suspension_reason": {
+      "type": ["null", "string"]
+    },
+    "use_universal_campaigns": {
+      "type": ["null", "boolean"]
+    },
+    "eid": {
+      "type": ["null", "string"]
+    },
+    "homepage_enabled": {
+      "type": ["null", "boolean"]
+    },
+    "account_is_autobilled": {
+      "type": ["null", "boolean"]
+    },
+    "updated_date": {
+      "type": ["null", "string"]
+    },
+    "marketo_client_id": {
+      "type": ["null", "string"]
+    },
+    "has_approved_safari_add_on": {
+      "type": ["null", "boolean"]
+    },
+    "currency": {
+      "type": ["null", "string"]
+    },
+    "campaign_monitor_client_id": {
+      "type": ["null", "string"]
+    },
+    "am_email": {
+      "type": ["null", "string"]
+    },
+    "is_campaign_monitor_syncing": {
+      "type": ["null", "boolean"]
+    },
+    "is_salesforce_system_owned": {
+      "type": ["null", "boolean"]
+    },
+    "abm_onboarding_status": {
+      "type": ["null", "string"]
+    },
+    "has_approved_consent_solution": {
+      "type": ["null", "boolean"]
+    },
+    "business_unit": {
+      "type": ["null", "string"]
+    },
+    "logo_url": {
+      "type": ["null", "string"]
+    },
+    "product_name": {
+      "type": "null"
+    },
+    "iab1_category_name": {
+      "type": ["null", "string"]
+    },
+    "optimizer": {
+      "type": ["null", "string"]
+    },
+    "iab_content_id": {
+      "type": ["null", "integer"]
+    },
+    "is_trusted": {
+      "type": ["null", "boolean"]
+    },
+    "cm_networks": {
+      "type": ["null", "string"]
+    },
+    "zvelo_category_id": {
+      "type": ["null", "integer"]
+    },
+    "is_twitter_syncing": {
+      "type": ["null", "boolean"]
+    },
+    "recent_theme_color": {
+      "type": ["null", "string"]
+    },
+    "has_sales_and_leads_automation": {
+      "type": ["null", "boolean"]
+    },
+    "account_is_suspended": {
+      "type": ["null", "boolean"]
+    },
+    "is_coop_approved": {
+      "type": ["null", "boolean"]
+    },
+    "csm_admin": {
+      "type": ["null", "string"]
+    },
+    "url": {
+      "type": ["null", "string"]
+    },
+    "iab2_category_name": {
+      "type": ["null", "string"]
+    },
+    "magellan_query": {
+      "type": ["null", "boolean"]
+    },
+    "revshare_click_percent": {
+      "type": ["null", "number"]
+    },
+    "organization": {
+      "type": ["null", "string"]
+    },
+    "magellan_legacy": {
+      "type": ["null", "boolean"]
+    }
+  }
+}
