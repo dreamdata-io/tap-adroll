@@ -10,7 +10,8 @@ pylint = "*"
 [packages]
 tap-adroll = {editable = true,path = "."}
 ipdb = "*"
-pyinquirer = {path = "."}
+pyinquirer = {editable = true,path = "."}
+ratelimit = "*"
 
 [requires]
 python_version = "3.8"

@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "1132eec8ba62ba50edd689f824ea78ec0a5bec6d31753531dfbf28cd53dfdfac"
+            "sha256": "97cf5881a35bba19b070ced8bba67da63b7b181aa743ef303cfbd60e62bfec30"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -151,6 +151,7 @@
             "version": "==2.6.1"
         },
         "pyinquirer": {
+            "editable": true,
             "path": "."
         },
         "python-dateutil": {
@@ -166,6 +167,13 @@
                 "sha256:c06425302f2cf668f1bba7a0a03f3c1d34d4ebeef2c72003da308b3947c7f749"
             ],
             "version": "==2018.4"
+        },
+        "ratelimit": {
+            "hashes": [
+                "sha256:af8a9b64b821529aca09ebaf6d8d279100d766f19e90b5059ac6a718ca6dee42"
+            ],
+            "index": "pypi",
+            "version": "==2.2.1"
         },
         "requests": {
             "hashes": [
