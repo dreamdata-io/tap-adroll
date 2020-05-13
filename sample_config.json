@@ -1,5 +1,5 @@
 {
   "api_key": "my_email@example.com",
-  "refresh_token": "Password12345@",
+  "access_token": "Password12345@",
   "start_date": "2018-01-01"
 }
