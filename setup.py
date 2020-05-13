@@ -15,6 +15,6 @@ setup(
     tap-adroll=tap_adroll:main
     """,
     packages=["tap_adroll"],
-    package_data={"schemas": ["tap_adroll/schemas/*.json"]},
+    package_data={"tap_adroll": ["schemas/*.json"]},
     include_package_data=True,
 )
