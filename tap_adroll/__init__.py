@@ -20,11 +20,9 @@ from singer import (
 
 
 STREAMS = {
-    "advertisables": {
-        "valid_replication_keys": ["updated_date"],
-        "key_properties": "eid",
-    },
-    "campaigns": {"valid_replication_keys": ["updated_date"], "key_properties": "eid",},
+    "advertisables": {"key_properties": "eid"},
+    "campaigns": {"key_properties": "eid"},
+    "deliveries": {"key_properties": "campaign_eid"},
 }
 REQUIRED_CONFIG_KEYS = ["start_date", "api_key", "access_token"]
 LOGGER = singer.get_logger()
@@ -52,9 +50,7 @@ def discover():
         key_properties = props.get("key_properties", [])
         schema = schemas.get(tap_stream_id)
         mdata = metadata.get_standard_metadata(
-            schema=schema,
-            key_properties=key_properties,
-            valid_replication_keys=props.get("valid_replication_keys", []),
+            schema=schema, key_properties=key_properties,
         )
         streams.append(
             CatalogEntry(
@@ -87,38 +83,18 @@ class AdRoll:
             for stream in self.catalog.get_selected_streams(state):
                 LOGGER.info("Syncing stream:" + stream.tap_stream_id)
 
-                bookmark_key = stream.metadata[0]["metadata"]["valid-replication-keys"][
-                    0
-                ]
-
                 singer.write_schema(
                     stream_name=stream.tap_stream_id,
                     schema=stream.to_dict(),
                     key_properties=stream.key_properties,
                 )
 
-                prev_bookmark = None
                 for row in self.get_streams(stream.tap_stream_id):
                     record = transformer.transform(
                         row, stream.schema.to_dict(), stream.metadata[0]
                     )
 
                     singer.write_records(stream.tap_stream_id, [record])
-
-                    replication_value = row[bookmark_key]
-                    new_bookmark = replication_value
-                    if not prev_bookmark:
-                        prev_bookmark = new_bookmark
-
-                    if prev_bookmark < new_bookmark:
-                        state = self.__advance_bookmark(
-                            state, prev_bookmark, stream.tap_stream_id, bookmark_key
-                        )
-                        prev_bookmark = new_bookmark
-
-                self.__advance_bookmark(
-                    state, prev_bookmark, stream.tap_stream_id, bookmark_key
-                )
 
     def get_streams(self, tap_stream_id):
         if tap_stream_id == "advertisables":
@@ -162,32 +138,6 @@ class AdRoll:
         LOGGER.info(response.url)
         response.raise_for_status()
         return response.json()
-
-    def __advance_bookmark(
-        self,
-        state: dict,
-        bookmark: Union[str, datetime, None],
-        tap_stream_id: str,
-        bookmark_key: str,
-    ):
-        if not bookmark:
-            singer.write_state(state)
-            return state
-
-        if isinstance(bookmark, datetime):
-            bookmark_datetime = bookmark
-        elif isinstance(bookmark, str):
-            bookmark_datetime = parser.isoparse(bookmark)
-        else:
-            raise ValueError(
-                f"bookmark is of type {type(bookmark)} but must be either string or datetime"
-            )
-
-        state = singer.write_bookmark(
-            state, tap_stream_id, bookmark_key, bookmark_datetime.isoformat()
-        )
-        singer.write_state(state)
-        return state
 
 
 @utils.handle_top_exception(LOGGER)
