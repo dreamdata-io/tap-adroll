@@ -117,6 +117,47 @@ class AdRoll:
                 )
                 self.campaigns = api_result["results"]
                 return self.campaigns
+        elif tap_stream_id == "deliveries":
+            deliveries = []
+            for campaign in self.campaigns:
+                campaign_start_date = campaign["start_date"]
+                if not campaign_start_date:
+                    campaign_start_date = campaign["created_date"]
+                campaign_start_date = self.format_date(campaign_start_date)
+
+                campaign_end_date = campaign["end_date"]
+                if campaign_end_date:
+                    campaign_end_date = self.format_date(campaign_end_date)
+                else:
+                    if not campaign["is_active"]:
+                        campaign_end_date = self.format_date(campaign["updated_date"])
+                    else:
+                        campaign_end_date = datetime.now().strftime("%Y-%m-%d")
+
+                api_result = self.call_api(
+                    url="uhura/v1/deliveries/campaign",
+                    params={
+                        "apikey": self.config["api_key"],
+                        "breakdowns": "summary",
+                        "currency": "USD",
+                        "advertisable_eid": campaign["advertisable"],
+                        "campaign_eids": campaign["eid"],
+                        "start_date": campaign_start_date,
+                        "end_date": campaign_end_date,
+                    },
+                )
+                summary = api_result["results"]["summary"]
+                deliveries.append(
+                    {
+                        "campaign_eid": campaign["eid"],
+                        "advertisable_eid": campaign["advertisable"],
+                        **summary,
+                    }
+                )
+            return deliveries
+
+    def format_date(self, input_date):
+        return datetime.strptime(input_date, "%Y-%m-%dT%H:%M:%S%z").strftime("%Y-%m-%d")
 
     @backoff.on_exception(
         backoff.expo,
