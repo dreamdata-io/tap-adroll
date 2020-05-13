@@ -3,11 +3,20 @@ import os
 import json
 import singer
 import backoff
-import datetime
 import requests
-from singer import utils, metadata
+import ratelimit
+from typing import Union
+from datetime import timedelta, datetime
+from dateutil import parser
+from ratelimit import limits
 from singer.catalog import Catalog, CatalogEntry
 from singer.schema import Schema
+from singer import (
+    utils,
+    metadata,
+    Transformer,
+    UNIX_MILLISECONDS_INTEGER_DATETIME_PARSING,
+)
 
 
 STREAMS = {
@@ -17,7 +26,7 @@ STREAMS = {
     },
     "campaigns": {"valid_replication_keys": ["updated_date"], "key_properties": "eid",},
 }
-REQUIRED_CONFIG_KEYS = ["start_date", "api_key", "refresh_token"]
+REQUIRED_CONFIG_KEYS = ["start_date", "api_key", "access_token"]
 LOGGER = singer.get_logger()
 
 
@@ -59,75 +68,142 @@ def discover():
     return Catalog(streams)
 
 
-def get_campaigns():
-    import ipdb
+class AdRoll:
+    BASE_URL = "https://services.adroll.com/"
 
-    ipdb.set_trace()
-    # for x in range(1000):
-    #     yield x
+    def __init__(self, config, state, catalog, limit=250):
+        self.SESSION = requests.Session()
+        self.limit = limit
+        self.access_token = config["access_token"]
+        self.config = config
+        self.state = state
+        self.catalog = catalog
+        self.accounts = None
 
+    def sync(self):
+        """ Sync data from tap source """
+        state = self.state
+        with Transformer(UNIX_MILLISECONDS_INTEGER_DATETIME_PARSING) as transformer:
+            for stream in self.catalog.get_selected_streams(state):
+                LOGGER.info("Syncing stream:" + stream.tap_stream_id)
 
-def streams(tap_stream_id):
-    if tap_stream_id == "campaigns":
-        yield get_campaigns()
+                bookmark_key = stream.metadata[0]["metadata"]["valid-replication-keys"][
+                    0
+                ]
 
+                singer.write_schema(
+                    stream_name=stream.tap_stream_id,
+                    schema=stream.to_dict(),
+                    key_properties=stream.key_properties,
+                )
 
-def sync(config, state, catalog):
-    """ Sync data from tap source """
-    # Loop over selected streams in catalog
-    for stream in catalog.get_selected_streams(state):
-        LOGGER.info("Syncing stream:" + stream.tap_stream_id)
+                prev_bookmark = None
+                for row in self.get_streams(stream.tap_stream_id):
+                    record = transformer.transform(
+                        row, stream.schema.to_dict(), stream.metadata[0]
+                    )
 
-        bookmark_column = stream.replication_key
-        is_sorted = (
-            True  # TODO: indicate whether data is sorted ascending on bookmark value
+                    singer.write_records(stream.tap_stream_id, [record])
+
+                    replication_value = row[bookmark_key]
+                    new_bookmark = replication_value
+                    if not prev_bookmark:
+                        prev_bookmark = new_bookmark
+
+                    if prev_bookmark < new_bookmark:
+                        state = self.__advance_bookmark(
+                            state, prev_bookmark, stream.tap_stream_id, bookmark_key
+                        )
+                        prev_bookmark = new_bookmark
+
+                self.__advance_bookmark(
+                    state, prev_bookmark, stream.tap_stream_id, bookmark_key
+                )
+
+    def get_streams(self, tap_stream_id):
+        if tap_stream_id == "advertisables":
+            api_result = self.call_api(
+                url="api/v1/organization/get_advertisables",
+                params={"apikey": self.config["api_key"]},
+            )
+            self.accounts = api_result["results"]
+            return self.accounts
+        elif tap_stream_id == "campaigns":
+            assert self.accounts and len(self.accounts) > 0
+
+            for account in self.accounts:
+                api_result = self.call_api(
+                    url="api/v1/advertisable/get_campaigns_fast",  # 🏎️ 💨 💨
+                    params={
+                        "apikey": self.config["api_key"],
+                        "advertisable": account["eid"],
+                    },
+                )
+                self.campaigns = api_result["results"]
+                return self.campaigns
+
+    @backoff.on_exception(
+        backoff.expo,
+        (
+            requests.exceptions.RequestException,
+            requests.exceptions.ReadTimeout,
+            requests.exceptions.HTTPError,
+            ratelimit.exception.RateLimitException,
+        ),
+        max_tries=10,
+    )
+    @limits(calls=100, period=10)
+    def call_api(self, url, params={}):
+        url = f"{self.BASE_URL}{url}"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+
+        response = self.SESSION.get(url, headers=headers, params=params)
+
+        LOGGER.info(response.url)
+        response.raise_for_status()
+        return response.json()
+
+    def __advance_bookmark(
+        self,
+        state: dict,
+        bookmark: Union[str, datetime, None],
+        tap_stream_id: str,
+        bookmark_key: str,
+    ):
+        if not bookmark:
+            singer.write_state(state)
+            return state
+
+        if isinstance(bookmark, datetime):
+            bookmark_datetime = bookmark
+        elif isinstance(bookmark, str):
+            bookmark_datetime = parser.isoparse(bookmark)
+        else:
+            raise ValueError(
+                f"bookmark is of type {type(bookmark)} but must be either string or datetime"
+            )
+
+        state = singer.write_bookmark(
+            state, tap_stream_id, bookmark_key, bookmark_datetime.isoformat()
         )
-
-        singer.write_schema(
-            stream_name=stream.tap_stream_id,
-            schema=stream.to_dict(),
-            key_properties=stream.key_properties,
-        )
-
-        streams(stream.tap_stream_id)
-
-        # TODO: delete and replace this inline function with your own data retrieval process:
-        tap_data = lambda: [{"id": x, "name": "row${x}"} for x in range(1000)]
-
-        max_bookmark = None
-        for row in tap_data():
-            # TODO: place type conversions or transformations here
-
-            # write one or more rows to the stream:
-            singer.write_records(stream.tap_stream_id, [row])
-            if bookmark_column:
-                if is_sorted:
-                    # update bookmark to latest value
-                    singer.write_state({stream.tap_stream_id: row[bookmark_column]})
-                else:
-                    # if data unsorted, save max value until end of writes
-                    max_bookmark = max(max_bookmark, row[bookmark_column])
-        if bookmark_column and not is_sorted:
-            singer.write_state({stream.tap_stream_id: max_bookmark})
-    return
+        singer.write_state(state)
+        return state
 
 
 @utils.handle_top_exception(LOGGER)
 def main():
-    # Parse command line arguments
     args = utils.parse_args(REQUIRED_CONFIG_KEYS)
 
-    # If discover flag was passed, run discovery mode and dump output to stdout
     if args.discover:
         catalog = discover()
         catalog.dump()
-    # Otherwise run in sync mode
     else:
         if args.catalog:
             catalog = args.catalog
         else:
             catalog = discover()
-        sync(args.config, args.state, catalog)
+        adroll_client = AdRoll(config=args.config, state=args.state, catalog=catalog)
+        adroll_client.sync()
 
 
 if __name__ == "__main__":
