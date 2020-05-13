@@ -24,7 +24,7 @@ STREAMS = {
     "campaigns": {"key_properties": "eid"},
     "deliveries": {"key_properties": "campaign_eid"},
 }
-REQUIRED_CONFIG_KEYS = ["start_date", "api_key", "access_token"]
+REQUIRED_CONFIG_KEYS = ["access_token"]
 LOGGER = singer.get_logger()
 
 
@@ -98,10 +98,7 @@ class AdRoll:
 
     def get_streams(self, tap_stream_id):
         if tap_stream_id == "advertisables":
-            api_result = self.call_api(
-                url="api/v1/organization/get_advertisables",
-                params={"apikey": self.config["api_key"]},
-            )
+            api_result = self.call_api(url="api/v1/organization/get_advertisables",)
             self.accounts = api_result["results"]
             return self.accounts
         elif tap_stream_id == "campaigns":
@@ -110,10 +107,7 @@ class AdRoll:
             for account in self.accounts:
                 api_result = self.call_api(
                     url="api/v1/advertisable/get_campaigns_fast",  # 🏎️ 💨 💨
-                    params={
-                        "apikey": self.config["api_key"],
-                        "advertisable": account["eid"],
-                    },
+                    params={"advertisable": account["eid"]},
                 )
                 self.campaigns = api_result["results"]
                 return self.campaigns
@@ -137,7 +131,6 @@ class AdRoll:
                 api_result = self.call_api(
                     url="uhura/v1/deliveries/campaign",
                     params={
-                        "apikey": self.config["api_key"],
                         "breakdowns": "summary",
                         "currency": "USD",
                         "advertisable_eid": campaign["advertisable"],
