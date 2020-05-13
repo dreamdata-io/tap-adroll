@@ -1,5 +1,5 @@
 {
-  "type": ["null", "object"],
+  "type": "object",
   "additionalProperties": true,
   "properties": {
     "show_web_dynamic_ads": {
@@ -228,7 +228,7 @@
       "type": ["null", "string"]
     },
     "product_name": {
-      "type": "null"
+      "type": ["null", "string"]
     },
     "iab1_category_name": {
       "type": ["null", "string"]
