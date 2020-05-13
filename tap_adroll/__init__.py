@@ -85,7 +85,7 @@ class AdRoll:
 
                 singer.write_schema(
                     stream_name=stream.tap_stream_id,
-                    schema=stream.to_dict(),
+                    schema=stream.schema.to_dict(),
                     key_properties=stream.key_properties,
                 )
 
