@@ -52,6 +52,9 @@ class AdRoll:
             return self.get_campaigns()
         elif tap_stream_id == "deliveries":
             return self.get_deliveries()
+        else:
+            LOGGER.info(f"UNKNOWN STREAM: {tap_stream_id}")
+            return []
 
     def get_advertisables(self):
         self.advertisables = self.call_api(url="api/v1/organization/get_advertisables",)
