@@ -154,12 +154,7 @@ class AdRoll:
 
     @backoff.on_exception(
         backoff.expo,
-        (
-            requests.exceptions.RequestException,
-            requests.exceptions.ReadTimeout,
-            requests.exceptions.HTTPError,
-            ratelimit.exception.RateLimitException,
-        ),
+        (requests.exceptions.RequestException, ratelimit.exception.RateLimitException),
         max_tries=10,
     )
     @limits(calls=100, period=10)
