@@ -129,7 +129,8 @@ class AdRoll:
     @backoff.on_exception(
         backoff.expo,
         (requests.exceptions.RequestException, exception.RateLimitException),
-        max_tries=10,
+        max_tries=5,
+        factor=2,
     )
     @limits(calls=100, period=10)
     def call_api(self, url, params={}):
