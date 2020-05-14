@@ -54,8 +54,7 @@ class AdRoll:
             return self.get_deliveries()
 
     def get_advertisables(self):
-        api_result = self.call_api(url="api/v1/organization/get_advertisables",)
-        self.advertisables = api_result["results"]
+        self.advertisables = self.call_api(url="api/v1/organization/get_advertisables",)
         return json.loads(
             json.dumps(self.advertisables), parse_int=str, parse_float=str
         )
@@ -64,11 +63,10 @@ class AdRoll:
         campaigns = []
         if self.advertisables and len(self.advertisables) > 0:
             for advertisable in self.advertisables:
-                api_result = self.call_api(
+                campaigns += self.call_api(
                     url="api/v1/advertisable/get_campaigns_fast",  # 🏎️ 💨 💨
                     params={"advertisable": advertisable["eid"]},
                 )
-                campaigns += api_result["results"]
 
         self.campaigns = campaigns
         return json.loads(json.dumps(self.campaigns), parse_int=str, parse_float=str)
@@ -101,7 +99,7 @@ class AdRoll:
                     "end_date": campaign_end_date,
                 },
             )
-            summary = api_result["results"]["summary"]
+            summary = api_result["summary"]
             deliveries.append(
                 {
                     "campaign_eid": campaign["eid"],
@@ -128,4 +126,6 @@ class AdRoll:
 
         LOGGER.info(response.url)
         response.raise_for_status()
-        return response.json()
+        response_json = response.json()
+
+        return response_json["results"]
