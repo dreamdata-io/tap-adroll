@@ -1,0 +1,20 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+black = "*"
+pylint = "*"
+
+[packages]
+tap-adroll = {editable = true,path = "."}
+ipdb = "*"
+pyinquirer = {editable = true,path = "."}
+ratelimit = "*"
+
+[requires]
+python_version = "3.8"
+
+[pipenv]
+allow_prereleases = true

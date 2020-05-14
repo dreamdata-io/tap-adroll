@@ -1,0 +1,97 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "eid": {
+      "type": ["null", "string"]
+    },
+    "name": {
+      "type": ["null", "string"]
+    },
+    "advertisable": {
+      "type": ["null", "string"]
+    },
+    "campaign_type": {
+      "type": ["null", "string"]
+    },
+    "status": {
+      "type": ["null", "string"]
+    },
+    "use_case": {
+      "type": ["null", "string"]
+    },
+    "source": {
+      "type": ["null", "string"]
+    },
+    "bid_strategy": {
+      "type": ["null", "string"]
+    },
+    "created_date": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "start_date": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "updated_date": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "end_date": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "is_active": {
+      "type": ["null", "boolean"]
+    },
+    "budget": {
+      "type": ["null", "string"]
+    },
+    "cpc": {
+      "type": ["null", "string"]
+    },
+    "cpm": {
+      "type": ["null", "string"]
+    },
+    "max_cpm": {
+      "type": ["null", "string"]
+    },
+    "adgroups": {
+      "type": ["null", "array"],
+      "items": {
+        "type": ["null", "string"]
+      }
+    },
+    "pricing_strategies": {
+      "type": ["null", "array"],
+      "items": {
+        "type": ["null", "object"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": ["null", "string"]
+          },
+          "network": {
+            "type": ["null", "string"]
+          },
+          "campaign": {
+            "type": ["null", "string"]
+          },
+          "is_active": {
+            "type": ["null", "boolean"]
+          },
+          "percentage_breakdown": {
+            "type": ["null", "string"]
+          },
+          "strategy_key": {
+            "type": ["null", "string"]
+          },
+          "virtual_cpc": {
+            "type": ["null", "string"]
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "advertisable_eid": {
+      "type": ["null", "string"]
+    },
+    "campaign_eid": {
+      "type": ["null", "string"]
+    },
+    "impressions": {
+      "type": ["null", "string"]
+    },
+    "clicks": {
+      "type": ["null", "string"]
+    },
+    "cost": {
+      "type": ["null", "string"]
+    }
+  }
+}
