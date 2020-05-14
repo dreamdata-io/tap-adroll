@@ -88,20 +88,6 @@ class AdRoll:
     def get_deliveries(self):
         deliveries = []
         for campaign in self.campaigns:
-            campaign_start_date = campaign.get("start_date") or campaign.get(
-                "created_date"
-            )
-            campaign_start_date = self.format_date(campaign_start_date)
-
-            campaign_end_date = campaign["end_date"]
-            if campaign_end_date:
-                campaign_end_date = self.format_date(campaign_end_date)
-            else:
-                if not campaign["is_active"]:
-                    campaign_end_date = self.format_date(campaign["updated_date"])
-                else:
-                    campaign_end_date = datetime.now().strftime("%Y-%m-%d")
-
             api_result = self.call_api(
                 url="uhura/v1/deliveries/campaign",
                 params={
@@ -109,8 +95,8 @@ class AdRoll:
                     "currency": "USD",
                     "advertisable_eid": campaign["advertisable"],
                     "campaign_eids": campaign["eid"],
-                    "start_date": campaign_start_date,
-                    "end_date": campaign_end_date,
+                    "start_date": self.get_campaign_start_date(campaign),
+                    "end_date": self.get_campaign_end_date(campaign),
                 },
             )
             summary = api_result["summary"]
@@ -122,6 +108,20 @@ class AdRoll:
                 }
             )
         return deliveries
+
+    def get_campaign_start_date(self, campaign):
+        campaign_start_date = campaign.get("start_date") or campaign.get("created_date")
+        return self.format_date(campaign_start_date)
+
+    def get_campaign_end_date(self, campaign):
+        campaign_end_date = campaign["end_date"]
+        if campaign_end_date:
+            return self.format_date(campaign_end_date)
+
+        if not campaign["is_active"]:
+            return self.format_date(campaign["updated_date"])
+
+        return datetime.now().strftime("%Y-%m-%d")
 
     def format_date(self, input_date):
         return datetime.strptime(input_date, "%Y-%m-%dT%H:%M:%S%z").strftime("%Y-%m-%d")
