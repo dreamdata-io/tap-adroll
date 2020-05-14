@@ -9,13 +9,13 @@
       "type": ["null", "string"]
     },
     "impressions": {
-      "type": ["null", "integer"]
+      "type": ["null", "string"]
     },
     "clicks": {
-      "type": ["null", "integer"]
+      "type": ["null", "string"]
     },
     "cost": {
-      "type": ["null", "number"]
+      "type": ["null", "string"]
     }
   }
 }

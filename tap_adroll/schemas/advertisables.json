@@ -36,22 +36,22 @@
       "type": ["null", "string"]
     },
     "click_through_conversion_window": {
-      "type": ["null", "integer"]
+      "type": ["null", "string"]
     },
     "is_active": {
       "type": ["null", "boolean"]
     },
     "view_through_conversion_window": {
-      "type": ["null", "integer"]
+      "type": ["null", "string"]
     },
     "fbx_account_id": {
-      "type": ["null", "integer"]
+      "type": ["null", "string"]
     },
     "page_access_request_status": {
       "type": ["null", "string"]
     },
     "iab1_category_id": {
-      "type": ["null", "integer"]
+      "type": ["null", "string"]
     },
     "name": {
       "type": ["null", "string"]
@@ -97,7 +97,7 @@
     "attached_users": {
       "type": ["null", "array"],
       "items": {
-        "type": ["null", "integer"]
+        "type": ["null", "string"]
       },
       "additionalItems": true
     },
@@ -114,10 +114,10 @@
       "type": ["null", "boolean"]
     },
     "instagram_actor_id": {
-      "type": ["null", "integer"]
+      "type": ["null", "string"]
     },
     "iab2_category_id": {
-      "type": ["null", "integer"]
+      "type": ["null", "string"]
     },
     "created_date": {
       "type": ["null", "string"]
@@ -138,7 +138,7 @@
       "type": ["null", "boolean"]
     },
     "revshare_view_percent": {
-      "type": ["null", "number"]
+      "type": ["null", "string"]
     },
     "fb_offsite_pixels_tos_accepted": {
       "type": ["null", "boolean"]
@@ -237,7 +237,7 @@
       "type": ["null", "string"]
     },
     "iab_content_id": {
-      "type": ["null", "integer"]
+      "type": ["null", "string"]
     },
     "is_trusted": {
       "type": ["null", "boolean"]
@@ -246,7 +246,7 @@
       "type": ["null", "string"]
     },
     "zvelo_category_id": {
-      "type": ["null", "integer"]
+      "type": ["null", "string"]
     },
     "is_twitter_syncing": {
       "type": ["null", "boolean"]
@@ -276,7 +276,7 @@
       "type": ["null", "boolean"]
     },
     "revshare_click_percent": {
-      "type": ["null", "number"]
+      "type": ["null", "string"]
     },
     "organization": {
       "type": ["null", "string"]

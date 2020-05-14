@@ -46,16 +46,16 @@
       "type": ["null", "boolean"]
     },
     "budget": {
-      "type": ["null", "integer", "number"]
+      "type": ["null", "string"]
     },
     "cpc": {
-      "type": ["null", "integer", "number"]
+      "type": ["null", "string"]
     },
     "cpm": {
-      "type": ["null", "integer", "number"]
+      "type": ["null", "string"]
     },
     "max_cpm": {
-      "type": ["null", "integer", "string"]
+      "type": ["null", "string"]
     },
     "adgroups": {
       "type": ["null", "array"],
@@ -70,7 +70,7 @@
         "additionalProperties": false,
         "properties": {
           "id": {
-            "type": ["null", "integer", "number"]
+            "type": ["null", "string"]
           },
           "network": {
             "type": ["null", "string"]
@@ -82,13 +82,13 @@
             "type": ["null", "boolean"]
           },
           "percentage_breakdown": {
-            "type": ["null", "integer", "string", "number"]
+            "type": ["null", "string"]
           },
           "strategy_key": {
             "type": ["null", "string"]
           },
           "virtual_cpc": {
-            "type": ["null", "integer", "number"]
+            "type": ["null", "string"]
           }
         }
       }
