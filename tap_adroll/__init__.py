@@ -2,21 +2,14 @@
 import os
 import json
 import singer
-import backoff
-import requests
-import ratelimit
 from typing import Union
-from datetime import timedelta, datetime
-from dateutil import parser
-from ratelimit import limits
 from singer.catalog import Catalog, CatalogEntry
 from singer.schema import Schema
 from singer import (
     utils,
     metadata,
-    Transformer,
-    UNIX_MILLISECONDS_INTEGER_DATETIME_PARSING,
 )
+from . import sync
 
 
 STREAMS = {
@@ -64,125 +57,6 @@ def discover():
     return Catalog(streams)
 
 
-class AdRoll:
-    BASE_URL = "https://services.adroll.com/"
-
-    def __init__(self, config, state, catalog, limit=250):
-        self.SESSION = requests.Session()
-        self.limit = limit
-        self.access_token = config["access_token"]
-        self.config = config
-        self.state = state
-        self.catalog = catalog
-        self.advertisables = None
-
-    def sync(self):
-        """ Sync data from tap source """
-        state = self.state
-        with Transformer(UNIX_MILLISECONDS_INTEGER_DATETIME_PARSING) as transformer:
-            for stream in self.catalog.get_selected_streams(state):
-                LOGGER.info("Syncing stream:" + stream.tap_stream_id)
-
-                singer.write_schema(
-                    stream_name=stream.tap_stream_id,
-                    schema=stream.schema.to_dict(),
-                    key_properties=stream.key_properties,
-                )
-
-                for row in self.get_streams(stream.tap_stream_id):
-                    record = transformer.transform(
-                        row, stream.schema.to_dict(), stream.metadata[0]
-                    )
-
-                    singer.write_records(stream.tap_stream_id, [record])
-
-    def get_streams(self, tap_stream_id):
-        if tap_stream_id == "advertisables":
-            return self.get_advertisables()
-        elif tap_stream_id == "campaigns":
-            return self.get_campaigns()
-        elif tap_stream_id == "deliveries":
-            return self.get_deliveries()
-
-    def get_advertisables(self):
-        api_result = self.call_api(url="api/v1/organization/get_advertisables",)
-        self.advertisables = api_result["results"]
-        return json.loads(
-            json.dumps(self.advertisables), parse_int=str, parse_float=str
-        )
-
-    def get_campaigns(self):
-        campaigns = []
-        if self.advertisables and len(self.advertisables) > 0:
-            for advertisable in self.advertisables:
-                api_result = self.call_api(
-                    url="api/v1/advertisable/get_campaigns_fast",  # 🏎️ 💨 💨
-                    params={"advertisable": advertisable["eid"]},
-                )
-                campaigns += api_result["results"]
-
-        self.campaigns = campaigns
-        return json.loads(json.dumps(self.campaigns), parse_int=str, parse_float=str)
-
-    def get_deliveries(self):
-        deliveries = []
-        return deliveries  # we are blocked on this endpoint
-        for campaign in self.campaigns:
-            campaign_start_date = campaign["start_date"]
-            if not campaign_start_date:
-                campaign_start_date = campaign["created_date"]
-            campaign_start_date = self.format_date(campaign_start_date)
-
-            campaign_end_date = campaign["end_date"]
-            if campaign_end_date:
-                campaign_end_date = self.format_date(campaign_end_date)
-            else:
-                if not campaign["is_active"]:
-                    campaign_end_date = self.format_date(campaign["updated_date"])
-                else:
-                    campaign_end_date = datetime.now().strftime("%Y-%m-%d")
-
-            api_result = self.call_api(
-                url="uhura/v1/deliveries/campaign",
-                params={
-                    "breakdowns": "summary",
-                    "currency": "USD",
-                    "advertisable_eid": campaign["advertisable"],
-                    "campaign_eids": campaign["eid"],
-                    "start_date": campaign_start_date,
-                    "end_date": campaign_end_date,
-                },
-            )
-            summary = api_result["results"]["summary"]
-            deliveries.append(
-                {
-                    "campaign_eid": campaign["eid"],
-                    "advertisable_eid": campaign["advertisable"],
-                    **summary,
-                }
-            )
-        return deliveries
-
-    def format_date(self, input_date):
-        return datetime.strptime(input_date, "%Y-%m-%dT%H:%M:%S%z").strftime("%Y-%m-%d")
-
-    @backoff.on_exception(
-        backoff.expo,
-        (requests.exceptions.RequestException, ratelimit.exception.RateLimitException),
-        max_tries=10,
-    )
-    @limits(calls=100, period=10)
-    def call_api(self, url, params={}):
-        url = f"{self.BASE_URL}{url}"
-        headers = {"Authorization": f"Bearer {self.access_token}"}
-
-        response = self.SESSION.get(url, headers=headers, params=params)
-
-        LOGGER.info(response.url)
-        response.raise_for_status()
-        return response.json()
-
-
 @utils.handle_top_exception(LOGGER)
 def main():
     args = utils.parse_args(REQUIRED_CONFIG_KEYS)
@@ -195,7 +69,9 @@ def main():
             catalog = args.catalog
         else:
             catalog = discover()
-        adroll_client = AdRoll(config=args.config, state=args.state, catalog=catalog)
+        adroll_client = sync.AdRoll(
+            config=args.config, state=args.state, catalog=catalog
+        )
         adroll_client.sync()
 
 
