@@ -74,9 +74,9 @@ class AdRoll:
     def get_deliveries(self):
         deliveries = []
         for campaign in self.campaigns:
-            campaign_start_date = campaign["start_date"]
-            if not campaign_start_date:
-                campaign_start_date = campaign["created_date"]
+            campaign_start_date = campaign.get("start_date") or campaign.get(
+                "created_date"
+            )
             campaign_start_date = self.format_date(campaign_start_date)
 
             campaign_end_date = campaign["end_date"]
