@@ -88,25 +88,31 @@ class AdRoll:
     def get_deliveries(self):
         deliveries = []
         for campaign in self.campaigns:
-            api_result = self.call_api(
-                url="uhura/v1/deliveries/campaign",
-                params={
-                    "breakdowns": "summary",
-                    "currency": "USD",
-                    "advertisable_eid": campaign["advertisable"],
-                    "campaign_eids": campaign["eid"],
-                    "start_date": self.get_campaign_start_date(campaign),
-                    "end_date": self.get_campaign_end_date(campaign),
-                },
-            )
-            summary = api_result["summary"]
-            deliveries.append(
-                {
-                    "campaign_eid": campaign["eid"],
-                    "advertisable_eid": campaign["advertisable"],
-                    **summary,
-                }
-            )
+            try:
+                api_result = self.call_api(
+                    url="uhura/v1/deliveries/campaign",
+                    params={
+                        "breakdowns": "summary",
+                        "currency": "USD",
+                        "advertisable_eid": campaign["advertisable"],
+                        "campaign_eids": campaign["eid"],
+                        "start_date": self.get_campaign_start_date(campaign),
+                        "end_date": self.get_campaign_end_date(campaign),
+                    },
+                )
+                summary = api_result["summary"]
+                deliveries.append(
+                    {
+                        "campaign_eid": campaign["eid"],
+                        "advertisable_eid": campaign["advertisable"],
+                        **summary,
+                    }
+                )
+            except (
+                requests.exceptions.RequestException,
+                exception.RateLimitException,
+            ) as err:
+                LOGGER.info(err)
         return deliveries
 
     def get_campaign_start_date(self, campaign):
