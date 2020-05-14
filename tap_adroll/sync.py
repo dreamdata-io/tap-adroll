@@ -71,8 +71,19 @@ class AdRoll:
                     params={"advertisable": advertisable["eid"]},
                 )
 
-        self.campaigns = campaigns
-        return json.loads(json.dumps(self.campaigns), parse_int=str, parse_float=str)
+        self.campaigns = [
+            {
+                "eid": campaign["eid"],
+                "advertisable": campaign["advertisable"],
+                "start_date": campaign["start_date"],
+                "created_date": campaign["created_date"],
+                "end_date": campaign["end_date"],
+                "is_active": campaign["is_active"],
+                "updated_date": campaign["updated_date"],
+            }
+            for campaign in campaigns
+        ]
+        return json.loads(json.dumps(campaigns), parse_int=str, parse_float=str)
 
     def get_deliveries(self):
         deliveries = []
