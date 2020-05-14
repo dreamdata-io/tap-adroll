@@ -74,7 +74,7 @@ class AdRoll:
         self.config = config
         self.state = state
         self.catalog = catalog
-        self.accounts = None
+        self.advertisables = None
 
     def sync(self):
         """ Sync data from tap source """
@@ -98,56 +98,70 @@ class AdRoll:
 
     def get_streams(self, tap_stream_id):
         if tap_stream_id == "advertisables":
-            api_result = self.call_api(url="api/v1/organization/get_advertisables",)
-            self.accounts = api_result["results"]
-            return self.accounts
+            return self.get_advertisables()
         elif tap_stream_id == "campaigns":
-            assert self.accounts and len(self.accounts) > 0
+            return self.get_campaigns()
+        elif tap_stream_id == "deliveries":
+            return self.get_deliveries()
 
-            for account in self.accounts:
+    def get_advertisables(self):
+        api_result = self.call_api(url="api/v1/organization/get_advertisables",)
+        self.advertisables = api_result["results"]
+        return json.loads(
+            json.dumps(self.advertisables), parse_int=str, parse_float=str
+        )
+
+    def get_campaigns(self):
+        campaigns = []
+        if self.advertisables and len(self.advertisables) > 0:
+            for advertisable in self.advertisables:
                 api_result = self.call_api(
                     url="api/v1/advertisable/get_campaigns_fast",  # 🏎️ 💨 💨
-                    params={"advertisable": account["eid"]},
+                    params={"advertisable": advertisable["eid"]},
                 )
-                self.campaigns = api_result["results"]
-                return self.campaigns
-        elif tap_stream_id == "deliveries":
-            deliveries = []
-            for campaign in self.campaigns:
-                campaign_start_date = campaign["start_date"]
-                if not campaign_start_date:
-                    campaign_start_date = campaign["created_date"]
-                campaign_start_date = self.format_date(campaign_start_date)
+                campaigns += api_result["results"]
 
-                campaign_end_date = campaign["end_date"]
-                if campaign_end_date:
-                    campaign_end_date = self.format_date(campaign_end_date)
+        self.campaigns = campaigns
+        return json.loads(json.dumps(self.campaigns), parse_int=str, parse_float=str)
+
+    def get_deliveries(self):
+        deliveries = []
+        return deliveries  # we are blocked on this endpoint
+        for campaign in self.campaigns:
+            campaign_start_date = campaign["start_date"]
+            if not campaign_start_date:
+                campaign_start_date = campaign["created_date"]
+            campaign_start_date = self.format_date(campaign_start_date)
+
+            campaign_end_date = campaign["end_date"]
+            if campaign_end_date:
+                campaign_end_date = self.format_date(campaign_end_date)
+            else:
+                if not campaign["is_active"]:
+                    campaign_end_date = self.format_date(campaign["updated_date"])
                 else:
-                    if not campaign["is_active"]:
-                        campaign_end_date = self.format_date(campaign["updated_date"])
-                    else:
-                        campaign_end_date = datetime.now().strftime("%Y-%m-%d")
+                    campaign_end_date = datetime.now().strftime("%Y-%m-%d")
 
-                api_result = self.call_api(
-                    url="uhura/v1/deliveries/campaign",
-                    params={
-                        "breakdowns": "summary",
-                        "currency": "USD",
-                        "advertisable_eid": campaign["advertisable"],
-                        "campaign_eids": campaign["eid"],
-                        "start_date": campaign_start_date,
-                        "end_date": campaign_end_date,
-                    },
-                )
-                summary = api_result["results"]["summary"]
-                deliveries.append(
-                    {
-                        "campaign_eid": campaign["eid"],
-                        "advertisable_eid": campaign["advertisable"],
-                        **summary,
-                    }
-                )
-            return deliveries
+            api_result = self.call_api(
+                url="uhura/v1/deliveries/campaign",
+                params={
+                    "breakdowns": "summary",
+                    "currency": "USD",
+                    "advertisable_eid": campaign["advertisable"],
+                    "campaign_eids": campaign["eid"],
+                    "start_date": campaign_start_date,
+                    "end_date": campaign_end_date,
+                },
+            )
+            summary = api_result["results"]["summary"]
+            deliveries.append(
+                {
+                    "campaign_eid": campaign["eid"],
+                    "advertisable_eid": campaign["advertisable"],
+                    **summary,
+                }
+            )
+        return deliveries
 
     def format_date(self, input_date):
         return datetime.strptime(input_date, "%Y-%m-%dT%H:%M:%S%z").strftime("%Y-%m-%d")
