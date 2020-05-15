@@ -46,16 +46,16 @@
       "type": ["null", "boolean"]
     },
     "budget": {
-      "type": ["null", "string"]
+      "type": ["null", "number"]
     },
     "cpc": {
-      "type": ["null", "string"]
+      "type": ["null", "number"]
     },
     "cpm": {
-      "type": ["null", "string"]
+      "type": ["null", "number"]
     },
     "max_cpm": {
-      "type": ["null", "string"]
+      "type": ["null", "number"]
     },
     "adgroups": {
       "type": ["null", "array"],
@@ -82,13 +82,13 @@
             "type": ["null", "boolean"]
           },
           "percentage_breakdown": {
-            "type": ["null", "string"]
+            "type": ["null", "number"]
           },
           "strategy_key": {
             "type": ["null", "string"]
           },
           "virtual_cpc": {
-            "type": ["null", "string"]
+            "type": ["null", "number"]
           }
         }
       }

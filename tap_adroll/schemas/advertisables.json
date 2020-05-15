@@ -36,13 +36,13 @@
       "type": ["null", "string"]
     },
     "click_through_conversion_window": {
-      "type": ["null", "string"]
+      "type": ["null", "number"]
     },
     "is_active": {
       "type": ["null", "boolean"]
     },
     "view_through_conversion_window": {
-      "type": ["null", "string"]
+      "type": ["null", "number"]
     },
     "fbx_account_id": {
       "type": ["null", "string"]
@@ -138,7 +138,7 @@
       "type": ["null", "boolean"]
     },
     "revshare_view_percent": {
-      "type": ["null", "string"]
+      "type": ["null", "number"]
     },
     "fb_offsite_pixels_tos_accepted": {
       "type": ["null", "boolean"]
@@ -276,7 +276,7 @@
       "type": ["null", "boolean"]
     },
     "revshare_click_percent": {
-      "type": ["null", "string"]
+      "type": ["null", "number"]
     },
     "organization": {
       "type": ["null", "string"]
