@@ -2,7 +2,8 @@ import backoff
 import json
 import requests
 import singer
-from datetime import datetime
+from datetime import datetime, timedelta
+from dateutil import parser
 from ratelimit import limits, exception
 from singer import (
     Transformer,
@@ -24,34 +25,36 @@ class AdRoll:
         self.state = state
         self.catalog = catalog
         self.advertisables = None
+        self.transformer = Transformer(UNIX_MILLISECONDS_INTEGER_DATETIME_PARSING)
+        self.active_campaigns = []
 
     def sync(self):
         """ Sync data from tap source """
-        state = self.state
-        with Transformer(UNIX_MILLISECONDS_INTEGER_DATETIME_PARSING) as transformer:
-            for stream in self.catalog.get_selected_streams(state):
-                LOGGER.info("Syncing stream:" + stream.tap_stream_id)
+        for stream in self.catalog.get_selected_streams(self.state):
+            LOGGER.info("Syncing stream:" + stream.tap_stream_id)
+            singer.write_schema(
+                stream_name=stream.tap_stream_id,
+                schema=stream.schema.to_dict(),
+                key_properties=stream.key_properties,
+            )
 
-                singer.write_schema(
-                    stream_name=stream.tap_stream_id,
-                    schema=stream.schema.to_dict(),
-                    key_properties=stream.key_properties,
-                )
+            if stream.tap_stream_id == "deliveries":
+                self.sync_deliveries(stream)
+            else:
+                self.sync_full_table_streams(stream)
 
-                for row in self.get_streams(stream.tap_stream_id):
-                    record = transformer.transform(
-                        row, stream.schema.to_dict(), stream.metadata[0]
-                    )
-
-                    singer.write_records(stream.tap_stream_id, [record])
+    def sync_full_table_streams(self, stream):
+        for row in self.get_streams(stream.tap_stream_id):
+            record = self.transformer.transform(
+                row, stream.schema.to_dict(), stream.metadata[0]
+            )
+            singer.write_records(stream.tap_stream_id, [record])
 
     def get_streams(self, tap_stream_id):
         if tap_stream_id == "advertisables":
             return self.get_advertisables()
         elif tap_stream_id == "campaigns":
             return self.get_campaigns()
-        elif tap_stream_id == "deliveries":
-            return self.get_deliveries()
         else:
             LOGGER.info(f"UNKNOWN STREAM: {tap_stream_id}")
             return []
@@ -71,7 +74,7 @@ class AdRoll:
                     params={"advertisable": advertisable["eid"]},
                 )
 
-        self.campaigns = [
+        campaigns = [
             {
                 "eid": campaign["eid"],
                 "advertisable": campaign["advertisable"],
@@ -83,37 +86,12 @@ class AdRoll:
             }
             for campaign in campaigns
         ]
-        return json.loads(json.dumps(campaigns), parse_int=str, parse_float=str)
 
-    def get_deliveries(self):
-        deliveries = []
-        for campaign in self.campaigns:
-            try:
-                api_result = self.call_api(
-                    url="uhura/v1/deliveries/campaign",
-                    params={
-                        "breakdowns": "summary",
-                        "currency": "USD",
-                        "advertisable_eid": campaign["advertisable"],
-                        "campaign_eids": campaign["eid"],
-                        "start_date": self.get_campaign_start_date(campaign),
-                        "end_date": self.get_campaign_end_date(campaign),
-                    },
-                )
-                summary = api_result["summary"]
-                deliveries.append(
-                    {
-                        "campaign_eid": campaign["eid"],
-                        "advertisable_eid": campaign["advertisable"],
-                        **summary,
-                    }
-                )
-            except (
-                requests.exceptions.RequestException,
-                exception.RateLimitException,
-            ) as err:
-                LOGGER.info(err)
-        return deliveries
+        self.active_campaigns = [
+            campaign for campaign in campaigns if campaign["is_active"]
+        ]
+
+        return json.loads(json.dumps(campaigns), parse_int=str, parse_float=str)
 
     def get_campaign_start_date(self, campaign):
         campaign_start_date = campaign.get("start_date") or campaign.get("created_date")
@@ -123,14 +101,10 @@ class AdRoll:
         campaign_end_date = campaign["end_date"]
         if campaign_end_date:
             return self.format_date(campaign_end_date)
-
-        if not campaign["is_active"]:
-            return self.format_date(campaign["updated_date"])
-
-        return datetime.now().strftime("%Y-%m-%d")
+        return datetime.now()
 
     def format_date(self, input_date):
-        return datetime.strptime(input_date, "%Y-%m-%dT%H:%M:%S%z").strftime("%Y-%m-%d")
+        return datetime.strptime(input_date, "%Y-%m-%dT%H:%M:%S%z")
 
     @backoff.on_exception(
         backoff.expo,
@@ -150,3 +124,110 @@ class AdRoll:
         response_json = response.json()
 
         return response_json["results"]
+
+    def sync_deliveries(self, stream):
+        state = self.state
+        for campaign in self.active_campaigns:
+            start_date = self.get_campaign_sync_start_date(stream, state, campaign)
+            synced_yesterday = (
+                start_date + timedelta(days=1)
+            ).date() >= datetime.today().date()
+
+            if synced_yesterday:
+                api_result = self.get_campaign_deliveries(
+                    campaign, start_date, end_date
+                )
+                state = self.write_campaign_deliveries_records_and_advance_state(
+                    stream, state, campaign, api_result
+                )
+            else:
+                end_date = start_date + timedelta(weeks=1)
+                while end_date <= self.get_campaign_end_date(campaign):
+                    api_result = self.get_campaign_deliveries(
+                        campaign, start_date, end_date
+                    )
+                    if not api_result:
+                        continue
+                    state = self.write_campaign_deliveries_records_and_advance_state(
+                        stream, state, campaign, api_result
+                    )
+                    start_date = end_date
+                    end_date = end_date + timedelta(weeks=1)
+
+    def get_campaign_sync_start_date(self, stream, state, campaign):
+        if state and state.get("bookmarks", {}).get(stream.tap_stream_id, None):
+            synced_campaigns = state["bookmarks"][stream.tap_stream_id]
+            if synced_campaigns and synced_campaigns.get(campaign["eid"], None):
+                return datetime.strptime(
+                    synced_campaigns[campaign["eid"]], "%Y-%m-%dT%H:%M:%S"
+                )
+
+        campaign_start_date = campaign.get("start_date") or campaign.get("created_date")
+        campaign_start_date = datetime.strptime(
+            campaign_start_date, "%Y-%m-%dT%H:%M:%S%z"
+        ).replace(tzinfo=None)
+
+        return campaign_start_date
+
+    def write_campaign_deliveries_records_and_advance_state(
+        self, stream, state, campaign, api_result
+    ):
+        for summary in api_result["date"]:
+            row = {
+                "campaign_eid": campaign["eid"],
+                "advertisable_eid": campaign["advertisable"],
+                **summary,
+            }
+            record = self.transformer.transform(
+                row, stream.schema.to_dict(), stream.metadata[0],
+            )
+            singer.write_records(stream.tap_stream_id, [record])
+
+        # write the state here for the entire week batch (last record from summary)
+        bookmark_key = campaign["eid"]
+        prev_bookmark = api_result["date"][-1]["date"]
+        return self.__advance_bookmark(
+            state,
+            bookmark=prev_bookmark,
+            tap_stream_id=stream.tap_stream_id,
+            bookmark_key=bookmark_key,
+        )
+
+    def get_campaign_deliveries(self, campaign, start_date, end_date):
+        try:
+            return self.call_api(
+                url="uhura/v1/deliveries/campaign",
+                params={
+                    "breakdowns": "date",
+                    "currency": "USD",
+                    "advertisable_eid": campaign["advertisable"],
+                    "campaign_eids": campaign["eid"],
+                    "start_date": start_date.strftime("%Y-%m-%d"),
+                    "end_date": end_date.strftime("%Y-%m-%d"),
+                },
+            )
+        except (
+            requests.exceptions.RequestException,
+            exception.RateLimitException,
+        ) as err:
+            LOGGER.info(err)
+
+    def __advance_bookmark(self, state, bookmark, tap_stream_id, bookmark_key):
+        if not bookmark:
+            singer.write_state(state)
+            return state
+
+        if isinstance(bookmark, datetime):
+            bookmark_datetime = bookmark
+        elif isinstance(bookmark, str):
+            bookmark_datetime = parser.isoparse(bookmark)
+        else:
+            raise ValueError(
+                f"bookmark is of type {type(bookmark)} but must be either string or datetime"
+            )
+
+        state = singer.write_bookmark(
+            state, tap_stream_id, bookmark_key, bookmark_datetime.isoformat()
+        )
+        singer.write_state(state)
+        return state
