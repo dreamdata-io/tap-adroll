@@ -129,30 +129,46 @@ class AdRoll:
         state = self.state
         for campaign in self.active_campaigns:
             start_date = self.get_campaign_sync_start_date(stream, state, campaign)
-            synced_yesterday = (
-                start_date + timedelta(days=1)
-            ).date() >= datetime.today().date()
+            campaign_end_date = self.get_campaign_end_date(campaign).date()
 
-            if synced_yesterday:
+            if (start_date + timedelta(days=1)).date() >= datetime.today().date():
                 api_result = self.get_campaign_deliveries(
-                    campaign, start_date, end_date
+                    campaign, start_date, campaign_end_date
                 )
                 state = self.write_campaign_deliveries_records_and_advance_state(
                     stream, state, campaign, api_result
                 )
             else:
-                end_date = start_date + timedelta(weeks=1)
-                while end_date <= self.get_campaign_end_date(campaign):
-                    api_result = self.get_campaign_deliveries(
-                        campaign, start_date, end_date
-                    )
-                    if not api_result:
-                        continue
-                    state = self.write_campaign_deliveries_records_and_advance_state(
-                        stream, state, campaign, api_result
-                    )
-                    start_date = end_date
-                    end_date = end_date + timedelta(weeks=1)
+                state = self.bulk_read_campaign_deliveries_from_dates(
+                    stream=stream,
+                    state=state,
+                    campaign=campaign,
+                    start_date=start_date,
+                    campaign_end_date=campaign_end_date,
+                )
+
+    def bulk_read_campaign_deliveries_from_dates(
+        self, stream, state, campaign, start_date, campaign_end_date
+    ):
+        end_date = min(start_date + timedelta(months=3), campaign_end_date)
+        while end_date.date() <= campaign_end_date:
+            eid = campaign.get("eid")
+            LOGGER.info(
+                f"campaign: {eid} start_date: {start_date} end_date: {end_date}"
+            )
+            api_result = self.get_campaign_deliveries(campaign, start_date, end_date)
+            if not api_result:
+                continue
+            state = self.write_campaign_deliveries_records_and_advance_state(
+                stream, state, campaign, api_result
+            )
+            if end_date == campaign_end_date:
+                break
+            else:
+                start_date = end_date
+                end_date = min(end_date + timedelta(months=3), campaign_end_date)
+
+        return state
 
     def get_campaign_sync_start_date(self, stream, state, campaign):
         if state and state.get("bookmarks", {}).get(stream.tap_stream_id, None):
