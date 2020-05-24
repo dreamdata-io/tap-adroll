@@ -93,19 +93,6 @@ class AdRoll:
 
         return json.loads(json.dumps(campaigns), parse_int=str, parse_float=str)
 
-    def get_campaign_start_date(self, campaign):
-        campaign_start_date = campaign.get("start_date") or campaign.get("created_date")
-        return self.format_date(campaign_start_date)
-
-    def get_campaign_end_date(self, campaign):
-        campaign_end_date = campaign["end_date"]
-        if campaign_end_date:
-            return self.format_date(campaign_end_date)
-        return datetime.now()
-
-    def format_date(self, input_date):
-        return datetime.strptime(input_date, "%Y-%m-%dT%H:%M:%S%z").replace(tzinfo=None)
-
     @backoff.on_exception(
         backoff.expo,
         (requests.exceptions.RequestException, exception.RateLimitException),
@@ -132,6 +119,10 @@ class AdRoll:
             campaign_end_date = self.get_campaign_end_date(campaign).date()
 
             if (start_date + timedelta(days=1)).date() >= datetime.today().date():
+                eid = campaign["eid"]
+                LOGGER.info(
+                    f"(fresh) campaign: {eid} start_date: {start_date} end_date: {campaign_end_date}"
+                )
                 api_result = self.get_campaign_deliveries(
                     campaign, start_date, campaign_end_date
                 )
@@ -152,7 +143,7 @@ class AdRoll:
     ):
         end_date = min(start_date + timedelta(months=3), campaign_end_date)
         while end_date.date() <= campaign_end_date:
-            eid = campaign.get("eid")
+            eid = campaign["eid"]
             LOGGER.info(
                 f"campaign: {eid} start_date: {start_date} end_date: {end_date}"
             )
@@ -184,6 +175,14 @@ class AdRoll:
         ).replace(tzinfo=None)
 
         return campaign_start_date
+
+    def get_campaign_end_date(self, campaign):
+        campaign_end_date = campaign["end_date"]
+        if campaign_end_date:
+            return datetime.strptime(campaign_end_date, "%Y-%m-%dT%H:%M:%S%z").replace(
+                tzinfo=None
+            )
+        return datetime.now()
 
     def write_campaign_deliveries_records_and_advance_state(
         self, stream, state, campaign, api_result
