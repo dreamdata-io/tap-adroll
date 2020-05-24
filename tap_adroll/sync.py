@@ -2,6 +2,7 @@ import backoff
 import json
 import requests
 import singer
+import sys
 from datetime import datetime, timedelta
 from dateutil import parser
 from ratelimit import limits, exception
@@ -98,6 +99,7 @@ class AdRoll:
         (requests.exceptions.RequestException, exception.RateLimitException),
         max_tries=5,
         factor=2,
+        giveup=lambda e: e.response.status_code in [429],  # too many requests
     )
     @limits(calls=100, period=10)
     def call_api(self, url, params={}):
@@ -221,11 +223,11 @@ class AdRoll:
                     "end_date": end_date.strftime("%Y-%m-%d"),
                 },
             )
-        except (
-            requests.exceptions.RequestException,
-            exception.RateLimitException,
-        ) as err:
-            LOGGER.info(err)
+        except requests.exceptions.HTTPError as exc:
+            if exc.response.status_code in [429]:
+                LOGGER.info(exc)
+                sys.exit()
+            raise
 
     def __advance_bookmark(self, state, bookmark, tap_stream_id, bookmark_key):
         if not bookmark:
