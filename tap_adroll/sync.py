@@ -88,10 +88,7 @@ class AdRoll:
             for campaign in campaigns
         ]
 
-        self.active_campaigns = [
-            campaign for campaign in campaigns if campaign["is_active"]
-        ]
-
+        self.active_campaigns = campaigns
         return json.loads(json.dumps(campaigns), parse_int=str, parse_float=str)
 
     @backoff.on_exception(
@@ -117,37 +114,38 @@ class AdRoll:
     def sync_deliveries(self, stream):
         state = self.state
         for campaign in self.active_campaigns:
+            eid = campaign["eid"]
+            # date of last sync, otherwise campaign start
             start_date = self.get_campaign_sync_start_date(stream, state, campaign)
-            campaign_end_date = self.get_campaign_end_date(campaign).date()
+            # date of campaign end if ended, otherwise today
+            campaign_end_date = self.get_campaign_end_date(campaign)
 
-            if (start_date + timedelta(days=1)).date() >= datetime.today().date():
-                eid = campaign["eid"]
+            # everything synced and campaign ended (not active)
+            if (start_date >= campaign_end_date) and not campaign["is_active"]:
                 LOGGER.info(
-                    f"(fresh) campaign: {eid} start_date: {start_date} end_date: {campaign_end_date}"
+                    f"(skipping) campaign: {eid} start_date: {start_date} end_date: {campaign_end_date}"
                 )
-                api_result = self.get_campaign_deliveries(
-                    campaign, start_date, campaign_end_date
-                )
-                state = self.write_campaign_deliveries_records_and_advance_state(
-                    stream, state, campaign, api_result
-                )
-            else:
-                state = self.bulk_read_campaign_deliveries_from_dates(
-                    stream=stream,
-                    state=state,
-                    campaign=campaign,
-                    start_date=start_date,
-                    campaign_end_date=campaign_end_date,
-                )
+                continue
+
+            LOGGER.info(
+                f"(syncing) campaign: {eid} start_date: {start_date} end_date: {campaign_end_date}"
+            )
+            state = self.bulk_read_campaign_deliveries_from_dates(
+                stream=stream,
+                state=state,
+                campaign=campaign,
+                start_date=start_date,
+                campaign_end_date=campaign_end_date,
+            )
 
     def bulk_read_campaign_deliveries_from_dates(
         self, stream, state, campaign, start_date, campaign_end_date
     ):
-        end_date = min(start_date + timedelta(months=3), campaign_end_date)
-        while end_date.date() <= campaign_end_date:
+        end_date = min(start_date + timedelta(weeks=12), campaign_end_date)
+        while end_date <= campaign_end_date:
             eid = campaign["eid"]
             LOGGER.info(
-                f"campaign: {eid} start_date: {start_date} end_date: {end_date}"
+                f"(advancing) campaign: {eid} start_date: {start_date} end_date: {end_date}"
             )
             api_result = self.get_campaign_deliveries(campaign, start_date, end_date)
             if not api_result:
@@ -159,7 +157,7 @@ class AdRoll:
                 break
             else:
                 start_date = end_date
-                end_date = min(end_date + timedelta(months=3), campaign_end_date)
+                end_date = min(end_date + timedelta(weeks=12), campaign_end_date)
 
         return state
 
@@ -169,22 +167,23 @@ class AdRoll:
             if synced_campaigns and synced_campaigns.get(campaign["eid"], None):
                 return datetime.strptime(
                     synced_campaigns[campaign["eid"]], "%Y-%m-%dT%H:%M:%S"
-                )
+                ).date()
 
         campaign_start_date = campaign.get("start_date") or campaign.get("created_date")
         campaign_start_date = datetime.strptime(
             campaign_start_date, "%Y-%m-%dT%H:%M:%S%z"
         ).replace(tzinfo=None)
-
-        return campaign_start_date
+        return campaign_start_date.date()
 
     def get_campaign_end_date(self, campaign):
         campaign_end_date = campaign["end_date"]
         if campaign_end_date:
-            return datetime.strptime(campaign_end_date, "%Y-%m-%dT%H:%M:%S%z").replace(
-                tzinfo=None
+            return (
+                datetime.strptime(campaign_end_date, "%Y-%m-%dT%H:%M:%S%z")
+                .replace(tzinfo=None)
+                .date()
             )
-        return datetime.now()
+        return datetime.today().date()
 
     def write_campaign_deliveries_records_and_advance_state(
         self, stream, state, campaign, api_result
