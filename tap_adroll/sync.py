@@ -104,7 +104,7 @@ class AdRoll:
         return datetime.now()
 
     def format_date(self, input_date):
-        return datetime.strptime(input_date, "%Y-%m-%dT%H:%M:%S%z")
+        return datetime.strptime(input_date, "%Y-%m-%dT%H:%M:%S%z").replace(tzinfo=None)
 
     @backoff.on_exception(
         backoff.expo,
