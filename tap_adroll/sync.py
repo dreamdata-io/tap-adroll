@@ -214,10 +214,12 @@ class AdRoll:
     def write_campaign_deliveries_records_and_advance_state(
         self, stream, state, campaign, api_result
     ):
+        eid = campaign["eid"]
+        advertisable_eid = campaign["advertisable"]
         for summary in api_result["date"]:
             row = {
-                "campaign_eid": campaign["eid"],
-                "advertisable_eid": campaign["advertisable"],
+                "campaign_eid": eid,
+                "advertisable_eid": advertisable_eid,
                 **summary,
             }
             record = self.transformer.transform(
@@ -225,14 +227,14 @@ class AdRoll:
             )
             singer.write_records(stream.tap_stream_id, [record])
 
-        # write the state here for the entire week batch (last record from summary)
-        bookmark_key = campaign["eid"]
-        prev_bookmark = api_result["date"][-1]["date"]
+        last_date_from_payload = api_result["date"][-1]["date"]
         return self.__advance_bookmark(
-            state,
-            bookmark=prev_bookmark,
+            state=state,
             tap_stream_id=stream.tap_stream_id,
-            bookmark_key=bookmark_key,
+            bookmark_key=eid,
+            bookmark_value=datetime.strptime(
+                last_date_from_payload, "%Y-%m-%d"
+            ).isoformat(),
         )
 
     def get_campaign_deliveries(self, campaign, start_date, end_date):
@@ -254,22 +256,13 @@ class AdRoll:
                 sys.exit()
             raise
 
-    def __advance_bookmark(self, state, bookmark, tap_stream_id, bookmark_key):
-        if not bookmark:
+    def __advance_bookmark(self, state, tap_stream_id, bookmark_key, bookmark_value):
+        if not bookmark_value:
             singer.write_state(state)
             return state
 
-        if isinstance(bookmark, datetime):
-            bookmark_datetime = bookmark
-        elif isinstance(bookmark, str):
-            bookmark_datetime = parser.isoparse(bookmark)
-        else:
-            raise ValueError(
-                f"bookmark is of type {type(bookmark)} but must be either string or datetime"
-            )
-
         state = singer.write_bookmark(
-            state, tap_stream_id, bookmark_key, bookmark_datetime.isoformat()
+            state, tap_stream_id, bookmark_key, bookmark_value
         )
         singer.write_state(state)
         return state
