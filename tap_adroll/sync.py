@@ -114,7 +114,10 @@ class AdRoll:
     def sync_deliveries(self, stream):
         state = self.state
         for campaign in self.active_campaigns:
-            eid = campaign["eid"]
+            eid = campaign.get("eid")
+            if not eid:
+                LOGGER.error(f"{campaign} has no attribute 'eid'")
+                continue
             # date of last sync, otherwise campaign start
             start_date = self.get_campaign_sync_start_date(stream, state, campaign)
             # date of campaign end if ended, otherwise today
