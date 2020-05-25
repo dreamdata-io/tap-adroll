@@ -136,7 +136,7 @@ class AdRoll:
                 continue
             # date of last sync, otherwise campaign start
             start_date = self.get_campaign_sync_start_date(stream, state, campaign)
-            # date of campaign end if ended, otherwise today
+            # date of campaign end if ended, otherwise None
             campaign_end_date = self.get_campaign_end_date(campaign)
 
             # everything synced and campaign ended (not active)
@@ -195,14 +195,13 @@ class AdRoll:
         return campaign_start_date.date()
 
     def get_campaign_end_date(self, campaign):
-        campaign_end_date = campaign["end_date"]
+        campaign_end_date = campaign.get("end_date")
         if campaign_end_date:
             return (
                 datetime.strptime(campaign_end_date, "%Y-%m-%dT%H:%M:%S%z")
                 .replace(tzinfo=None)
                 .date()
             )
-        return datetime.today().date()
 
     def write_campaign_deliveries_records_and_advance_state(
         self, stream, state, campaign, api_result
