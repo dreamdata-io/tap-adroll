@@ -2,7 +2,6 @@ import backoff
 import json
 import requests
 import singer
-import sys
 from typing import Union, List, Tuple
 from datetime import datetime, date, timedelta
 from dateutil import parser
@@ -12,6 +11,7 @@ from singer import (
     UNIX_MILLISECONDS_INTEGER_DATETIME_PARSING,
 )
 
+from . import exceptions
 
 LOGGER = singer.get_logger()
 
@@ -253,7 +253,7 @@ class AdRoll:
         except requests.exceptions.HTTPError as exc:
             if exc.response.status_code in [429]:
                 LOGGER.error(exc)
-                sys.exit()
+                raise exceptions.AdrollAPIQuotaExceeded("429")
             raise
 
     def __advance_bookmark(self, state, tap_stream_id, bookmark_key, bookmark_value):

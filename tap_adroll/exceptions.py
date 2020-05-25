@@ -1,0 +1,2 @@
+class AdrollAPIQuotaExceeded(Exception):
+    pass
