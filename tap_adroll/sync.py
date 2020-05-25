@@ -135,30 +135,35 @@ class AdRoll:
                 LOGGER.error(f"{campaign} has no attribute 'eid'")
                 continue
             # date of last sync, otherwise campaign start
-            start_date = self.get_campaign_sync_start_date(stream, state, campaign)
+            sync_start_date = self.get_campaign_sync_start_date(stream, state, campaign)
             # date of campaign end if ended, otherwise None
             campaign_end_date = self.get_campaign_end_date(campaign)
 
             # everything synced and campaign ended (not active)
-            if (start_date >= campaign_end_date) and not campaign["is_active"]:
+            if (sync_start_date >= campaign_end_date) and not campaign["is_active"]:
                 LOGGER.info(
-                    f"(skipping) campaign: {eid} start_date: {start_date} end_date: {campaign_end_date}"
+                    f"(skipping) campaign: {eid} start_date: {sync_start_date} end_date: {campaign_end_date}"
                 )
                 continue
 
             LOGGER.info(
-                f"(syncing) campaign: {eid} start_date: {start_date} end_date: {campaign_end_date}"
+                f"(syncing) campaign: {eid} start_date: {sync_start_date} end_date: {campaign_end_date}"
             )
             state = self.bulk_read_campaign_deliveries_from_dates(
                 stream=stream,
                 state=state,
                 campaign=campaign,
-                start_date=start_date,
+                sync_start_date=sync_start_date,
                 campaign_end_date=campaign_end_date,
             )
 
     def bulk_read_campaign_deliveries_from_dates(
-        self, stream, state, campaign, start_date, campaign_end_date
+        self,
+        stream,
+        state,
+        campaign,
+        sync_start_date,
+        campaign_end_date: Union[None, datetime],
     ):
         end_date = min(start_date + timedelta(weeks=12), campaign_end_date)
         while end_date <= campaign_end_date:
