@@ -165,33 +165,36 @@ class AdRoll:
         sync_start_date,
         campaign_end_date: Union[None, datetime],
     ):
-        end_date = min(start_date + timedelta(weeks=12), campaign_end_date)
-        while end_date <= campaign_end_date:
+        for start_date, end_date in date_chunks(
+            start_date=sync_start_date,
+            increment=timedelta(weeks=26),
+            maximum=campaign_end_date,
+        ):
             eid = campaign["eid"]
             LOGGER.info(
                 f"(advancing) campaign: {eid} start_date: {start_date} end_date: {end_date}"
             )
             api_result = self.get_campaign_deliveries(campaign, start_date, end_date)
-            if not api_result:
-                continue
             state = self.write_campaign_deliveries_records_and_advance_state(
                 stream, state, campaign, api_result
             )
-            if end_date == campaign_end_date:
-                break
-            else:
-                start_date = end_date
-                end_date = min(end_date + timedelta(weeks=12), campaign_end_date)
 
         return state
 
     def get_campaign_sync_start_date(self, stream, state, campaign):
+        """
+            If we are able to find the date in bookmarks, we add one day to that date.
+            We add one day, because the start_dates are previous end_dates for which we already have data
+            ex. the resulting payload contains 2018-01-01 as last date we keep that last date in state
+            and the next day we use it as start date, but we already have data for that day,
+            so we need to set it to 2018-01-02
+        """
         if state and state.get("bookmarks", {}).get(stream.tap_stream_id, None):
             synced_campaigns = state["bookmarks"][stream.tap_stream_id]
             if synced_campaigns and synced_campaigns.get(campaign["eid"], None):
                 return datetime.strptime(
                     synced_campaigns[campaign["eid"]], "%Y-%m-%dT%H:%M:%S"
-                ).date()
+                ).date() + timedelta(days=1)
 
         campaign_start_date = campaign.get("start_date") or campaign.get("created_date")
         campaign_start_date = datetime.strptime(
