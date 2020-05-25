@@ -140,7 +140,11 @@ class AdRoll:
             campaign_end_date = self.get_campaign_end_date(campaign)
 
             # everything synced and campaign ended (not active)
-            if (sync_start_date >= campaign_end_date) and not campaign["is_active"]:
+            if (
+                campaign_end_date
+                and (sync_start_date >= campaign_end_date)
+                and not campaign["is_active"]
+            ):
                 LOGGER.info(
                     f"(skipping) campaign: {eid} start_date: {sync_start_date} end_date: {campaign_end_date}"
                 )
