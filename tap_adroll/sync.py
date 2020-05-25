@@ -250,7 +250,7 @@ class AdRoll:
             )
         except requests.exceptions.HTTPError as exc:
             if exc.response.status_code in [429]:
-                LOGGER.info(exc)
+                LOGGER.error(exc)
                 sys.exit()
             raise
 
