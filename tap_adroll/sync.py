@@ -3,7 +3,8 @@ import json
 import requests
 import singer
 import sys
-from datetime import datetime, timedelta
+from typing import Union, List, Tuple
+from datetime import datetime, date, timedelta
 from dateutil import parser
 from ratelimit import limits, exception
 from singer import (
@@ -13,6 +14,21 @@ from singer import (
 
 
 LOGGER = singer.get_logger()
+
+
+def date_chunks(
+    start_date: date, increment: timedelta, maximum: date = None
+) -> List[Tuple[date, date]]:
+    start = start_date
+    if not maximum:
+        maximum = datetime.utcnow().date() - timedelta(days=1)
+
+    while True:
+        end_date = min(start + increment, maximum)
+        yield (start, end_date)
+        start = end_date
+        if end_date == maximum:
+            return
 
 
 class AdRoll:
