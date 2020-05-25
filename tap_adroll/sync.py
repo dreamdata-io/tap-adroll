@@ -174,6 +174,9 @@ class AdRoll:
             increment=timedelta(weeks=26),
             maximum=campaign_end_date,
         ):
+            if start_date == end_date:
+                # API raises 400 if the start and end dates are identical.
+                break
             eid = campaign["eid"]
             LOGGER.info(
                 f"(advancing) campaign: {eid} start_date: {start_date} end_date: {end_date}"
