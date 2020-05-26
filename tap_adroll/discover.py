@@ -7,9 +7,13 @@ from singer.catalog import Catalog, CatalogEntry
 
 
 STREAMS = {
-    "advertisables": {"key_properties": "eid"},
-    "campaigns": {"key_properties": "eid"},
-    "deliveries": {"key_properties": "campaign_eid"},
+    "advertisables": {"key_properties": "eid", "replication_method": "FULL_TABLE"},
+    "campaigns": {"key_properties": "eid", "replication_method": "FULL_TABLE"},
+    "deliveries": {
+        "key_properties": "campaign_eid",
+        "replication_method": "INCREMENTAL",
+        "valid_replication_keys": ["date"],
+    },
 }
 
 
@@ -33,9 +37,15 @@ def discover():
     streams = []
     for tap_stream_id, props in STREAMS.items():
         key_properties = props.get("key_properties", [])
+        valid_replication_keys = props.get("valid_replication_keys", [])
+        replication_method = props.get("replication_method")
+
         schema = schemas.get(tap_stream_id)
         mdata = metadata.get_standard_metadata(
-            schema=schema, key_properties=key_properties,
+            schema=schema,
+            key_properties=key_properties,
+            valid_replication_keys=valid_replication_keys,
+            replication_method=replication_method,
         )
         streams.append(
             CatalogEntry(
@@ -44,6 +54,7 @@ def discover():
                 key_properties=key_properties,
                 schema=Schema.from_dict(schema),
                 metadata=mdata,
+                replication_method=replication_method,
             )
         )
     return Catalog(streams)
