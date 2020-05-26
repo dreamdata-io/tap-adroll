@@ -259,8 +259,7 @@ class AdRoll:
             )
         except requests.exceptions.HTTPError as exc:
             if exc.response.status_code in [429]:
-                LOGGER.error(exc)
-                raise exceptions.AdrollAPIQuotaExceeded("429")
+                raise exceptions.AdrollAPIQuotaExceeded(exc)
             raise
 
     def __advance_bookmark(self, state, tap_stream_id, bookmark_key, bookmark_value):

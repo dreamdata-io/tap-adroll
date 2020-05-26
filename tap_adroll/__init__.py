@@ -28,7 +28,8 @@ def main():
         )
         try:
             adroll_client.sync()
-        except exceptions.AdrollAPIQuotaExceeded:
+        except exceptions.AdrollAPIQuotaExceeded as exc:
+            LOGGER.error(exc)
             sys.exit(0)
 
 
