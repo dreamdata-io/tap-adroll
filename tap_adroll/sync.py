@@ -2,7 +2,7 @@ import backoff
 import json
 import requests
 import singer
-from typing import Union, List, Tuple
+from typing import Optional, List, Tuple
 from datetime import datetime, date, timedelta
 from dateutil import parser
 from ratelimit import limits, exception
@@ -171,7 +171,7 @@ class AdRoll:
         state,
         campaign,
         sync_start_date,
-        campaign_end_date: Union[None, datetime],
+        campaign_end_date: Optional[datetime],
     ):
         for start_date, end_date in date_chunks(
             start_date=sync_start_date,
