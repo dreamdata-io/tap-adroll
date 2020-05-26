@@ -1,16 +1,37 @@
+import sys
 import backoff
 import json
 import requests
 import singer
-from datetime import datetime
+from typing import Optional, List, Tuple
+from datetime import datetime, date, timedelta
+from dateutil import parser
 from ratelimit import limits, exception
 from singer import (
     Transformer,
     UNIX_MILLISECONDS_INTEGER_DATETIME_PARSING,
 )
 
-
 LOGGER = singer.get_logger()
+DELIVERIES_CHUNKS_WEEKS = 26  # 26 weeks is roughly 6 months
+
+
+def date_chunks(
+    start_date: date, increment: timedelta, maximum: date = None
+) -> List[Tuple[date, date]]:
+    start = start_date
+    if not maximum:
+        maximum = datetime.utcnow().date() - timedelta(days=1)
+
+    while True:
+        end_date = min(start + increment, maximum)
+        if start == end_date:
+            # API raises 400 if the start and end dates are identical.
+            return
+        yield (start, end_date)
+        start = end_date
+        if end_date == maximum:
+            return
 
 
 class AdRoll:
@@ -24,34 +45,38 @@ class AdRoll:
         self.state = state
         self.catalog = catalog
         self.advertisables = None
+        self.transformer = Transformer(UNIX_MILLISECONDS_INTEGER_DATETIME_PARSING)
+        self.active_campaigns = []
 
     def sync(self):
         """ Sync data from tap source """
-        state = self.state
-        with Transformer(UNIX_MILLISECONDS_INTEGER_DATETIME_PARSING) as transformer:
-            for stream in self.catalog.get_selected_streams(state):
-                LOGGER.info("Syncing stream:" + stream.tap_stream_id)
+        for stream in self.catalog.get_selected_streams(self.state):
+            LOGGER.info("Syncing stream:" + stream.tap_stream_id)
+            singer.write_schema(
+                stream_name=stream.tap_stream_id,
+                schema=stream.schema.to_dict(),
+                key_properties=stream.key_properties,
+            )
 
-                singer.write_schema(
-                    stream_name=stream.tap_stream_id,
-                    schema=stream.schema.to_dict(),
-                    key_properties=stream.key_properties,
-                )
+            if stream.tap_stream_id == "deliveries":
+                self.sync_deliveries(stream)
+            else:
+                self.sync_full_table_streams(stream)
 
-                for row in self.get_streams(stream.tap_stream_id):
-                    record = transformer.transform(
-                        row, stream.schema.to_dict(), stream.metadata[0]
-                    )
+        singer.write_state(self.state)
 
-                    singer.write_records(stream.tap_stream_id, [record])
+    def sync_full_table_streams(self, stream):
+        for row in self.get_streams(stream.tap_stream_id):
+            record = self.transformer.transform(
+                row, stream.schema.to_dict(), stream.metadata[0]
+            )
+            singer.write_records(stream.tap_stream_id, [record])
 
     def get_streams(self, tap_stream_id):
         if tap_stream_id == "advertisables":
             return self.get_advertisables()
         elif tap_stream_id == "campaigns":
             return self.get_campaigns()
-        elif tap_stream_id == "deliveries":
-            return self.get_deliveries()
         else:
             LOGGER.info(f"UNKNOWN STREAM: {tap_stream_id}")
             return []
@@ -70,8 +95,7 @@ class AdRoll:
                     url="api/v1/advertisable/get_campaigns_fast",  # 🏎️ 💨 💨
                     params={"advertisable": advertisable["eid"]},
                 )
-
-        self.campaigns = [
+        self.active_campaigns = [
             {
                 "eid": campaign["eid"],
                 "advertisable": campaign["advertisable"],
@@ -85,58 +109,12 @@ class AdRoll:
         ]
         return json.loads(json.dumps(campaigns), parse_int=str, parse_float=str)
 
-    def get_deliveries(self):
-        deliveries = []
-        for campaign in self.campaigns:
-            try:
-                api_result = self.call_api(
-                    url="uhura/v1/deliveries/campaign",
-                    params={
-                        "breakdowns": "summary",
-                        "currency": "USD",
-                        "advertisable_eid": campaign["advertisable"],
-                        "campaign_eids": campaign["eid"],
-                        "start_date": self.get_campaign_start_date(campaign),
-                        "end_date": self.get_campaign_end_date(campaign),
-                    },
-                )
-                summary = api_result["summary"]
-                deliveries.append(
-                    {
-                        "campaign_eid": campaign["eid"],
-                        "advertisable_eid": campaign["advertisable"],
-                        **summary,
-                    }
-                )
-            except (
-                requests.exceptions.RequestException,
-                exception.RateLimitException,
-            ) as err:
-                LOGGER.info(err)
-        return deliveries
-
-    def get_campaign_start_date(self, campaign):
-        campaign_start_date = campaign.get("start_date") or campaign.get("created_date")
-        return self.format_date(campaign_start_date)
-
-    def get_campaign_end_date(self, campaign):
-        campaign_end_date = campaign["end_date"]
-        if campaign_end_date:
-            return self.format_date(campaign_end_date)
-
-        if not campaign["is_active"]:
-            return self.format_date(campaign["updated_date"])
-
-        return datetime.now().strftime("%Y-%m-%d")
-
-    def format_date(self, input_date):
-        return datetime.strptime(input_date, "%Y-%m-%dT%H:%M:%S%z").strftime("%Y-%m-%d")
-
     @backoff.on_exception(
         backoff.expo,
         (requests.exceptions.RequestException, exception.RateLimitException),
         max_tries=5,
         factor=2,
+        giveup=lambda e: e.response.status_code in [429],  # too many requests
     )
     @limits(calls=100, period=10)
     def call_api(self, url, params={}):
@@ -150,3 +128,150 @@ class AdRoll:
         response_json = response.json()
 
         return response_json["results"]
+
+    def sync_deliveries(self, stream):
+        state = self.state
+        for campaign in self.active_campaigns:
+            eid = campaign.get("eid")
+            if not eid:
+                LOGGER.error(f"{campaign} has no attribute 'eid'")
+                continue
+            # date of last sync, otherwise campaign start
+            sync_start_date = self.get_campaign_sync_start_date(stream, state, campaign)
+            # date of campaign end if ended, otherwise None
+            campaign_end_date = self.get_campaign_end_date(campaign)
+
+            # everything synced and campaign ended (not active)
+            if (
+                campaign_end_date
+                and (sync_start_date >= campaign_end_date)
+                and not campaign["is_active"]
+            ):
+                LOGGER.info(
+                    f"(skipping) campaign: {eid} start_date: {sync_start_date} end_date: {campaign_end_date}"
+                )
+                continue
+
+            LOGGER.info(
+                f"(syncing) campaign: {eid} start_date: {sync_start_date} end_date: {campaign_end_date}"
+            )
+            state = self.bulk_read_campaign_deliveries_from_dates(
+                stream=stream,
+                state=state,
+                campaign=campaign,
+                sync_start_date=sync_start_date,
+                campaign_end_date=campaign_end_date,
+            )
+            self.state = state
+
+    def bulk_read_campaign_deliveries_from_dates(
+        self,
+        stream,
+        state,
+        campaign,
+        sync_start_date,
+        campaign_end_date: Optional[datetime],
+    ):
+        for start_date, end_date in date_chunks(
+            start_date=sync_start_date,
+            increment=timedelta(weeks=DELIVERIES_CHUNKS_WEEKS),
+            maximum=campaign_end_date,
+        ):
+            eid = campaign["eid"]
+            LOGGER.info(
+                f"(advancing) campaign: {eid} start_date: {start_date} end_date: {end_date}"
+            )
+            api_result = self.get_campaign_deliveries(campaign, start_date, end_date)
+            state = self.write_campaign_deliveries_records_and_advance_state(
+                stream, state, campaign, api_result
+            )
+
+        return state
+
+    def get_campaign_sync_start_date(self, stream, state, campaign):
+        """
+            If we are able to find the date in bookmarks, we add one day to that date.
+            We add one day, because the start_dates are previous end_dates for which we already have data
+            ex. the resulting payload contains 2018-01-01 as last date we keep that last date in state
+            and the next day we use it as start date, but we already have data for that day,
+            so we need to set it to 2018-01-02
+        """
+        if state and state.get("bookmarks", {}).get(stream.tap_stream_id, None):
+            synced_campaigns = state["bookmarks"][stream.tap_stream_id]
+            if synced_campaigns and synced_campaigns.get(campaign["eid"], None):
+                return datetime.strptime(
+                    synced_campaigns[campaign["eid"]], "%Y-%m-%dT%H:%M:%S"
+                ).date() + timedelta(days=1)
+
+        campaign_start_date = campaign.get("start_date") or campaign.get("created_date")
+        campaign_start_date = datetime.strptime(
+            campaign_start_date, "%Y-%m-%dT%H:%M:%S%z"
+        ).replace(tzinfo=None)
+        return campaign_start_date.date()
+
+    def get_campaign_end_date(self, campaign):
+        campaign_end_date = campaign.get("end_date")
+        if campaign_end_date:
+            return (
+                datetime.strptime(campaign_end_date, "%Y-%m-%dT%H:%M:%S%z")
+                .replace(tzinfo=None)
+                .date()
+            )
+
+    def write_campaign_deliveries_records_and_advance_state(
+        self, stream, state, campaign, api_result
+    ):
+        eid = campaign["eid"]
+        advertisable_eid = campaign["advertisable"]
+        for summary in api_result["date"]:
+            row = {
+                "campaign_eid": eid,
+                "advertisable_eid": advertisable_eid,
+                **summary,
+            }
+            record = self.transformer.transform(
+                row, stream.schema.to_dict(), stream.metadata[0],
+            )
+            singer.write_records(stream.tap_stream_id, [record])
+
+        last_date_from_payload = api_result["date"][-1]["date"]
+        return self.__advance_bookmark(
+            state=state,
+            tap_stream_id=stream.tap_stream_id,
+            bookmark_key=eid,
+            bookmark_value=datetime.strptime(
+                last_date_from_payload, "%Y-%m-%d"
+            ).isoformat(),
+        )
+
+    def get_campaign_deliveries(self, campaign, start_date, end_date):
+        try:
+            return self.call_api(
+                url="uhura/v1/deliveries/campaign",
+                params={
+                    "breakdowns": "date",
+                    "currency": "USD",
+                    "advertisable_eid": campaign["advertisable"],
+                    "campaign_eids": campaign["eid"],
+                    "start_date": start_date.strftime("%Y-%m-%d"),
+                    "end_date": end_date.strftime("%Y-%m-%d"),
+                },
+            )
+        except requests.exceptions.HTTPError as exc:
+            if exc.response.status_code in [429]:
+                LOGGER.error(exc)
+                LOGGER.info(self.state)
+                singer.write_state(self.state)
+                sys.exit(0)
+            raise
+
+    def __advance_bookmark(self, state, tap_stream_id, bookmark_key, bookmark_value):
+        if not bookmark_value:
+            singer.write_state(state)
+            return state
+
+        state = singer.write_bookmark(
+            state, tap_stream_id, bookmark_key, bookmark_value
+        )
+        singer.write_state(state)
+        return state

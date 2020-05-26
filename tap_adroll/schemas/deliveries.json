@@ -2,6 +2,10 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "date": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
     "advertisable_eid": {
       "type": ["null", "string"]
     },
