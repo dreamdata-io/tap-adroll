@@ -4,7 +4,7 @@ import singer
 
 from singer import utils
 
-from . import sync, discover, exceptions
+from . import sync, discover
 
 
 REQUIRED_CONFIG_KEYS = ["access_token"]
@@ -26,11 +26,7 @@ def main():
         adroll_client = sync.AdRoll(
             config=args.config, state=args.state, catalog=catalog
         )
-        try:
-            adroll_client.sync()
-        except exceptions.AdrollAPIQuotaExceeded as exc:
-            LOGGER.error(exc)
-            sys.exit(0)
+        adroll_client.sync()
 
 
 if __name__ == "__main__":

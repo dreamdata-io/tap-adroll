@@ -1,3 +1,4 @@
+import sys
 import backoff
 import json
 import requests
@@ -10,8 +11,6 @@ from singer import (
     Transformer,
     UNIX_MILLISECONDS_INTEGER_DATETIME_PARSING,
 )
-
-from . import exceptions
 
 LOGGER = singer.get_logger()
 DELIVERIES_CHUNKS_WEEKS = 26  # 26 weeks is roughly 6 months
@@ -64,6 +63,8 @@ class AdRoll:
             else:
                 self.sync_full_table_streams(stream)
 
+        singer.write_state(self.state)
+
     def sync_full_table_streams(self, stream):
         for row in self.get_streams(stream.tap_stream_id):
             record = self.transformer.transform(
@@ -94,8 +95,7 @@ class AdRoll:
                     url="api/v1/advertisable/get_campaigns_fast",  # 🏎️ 💨 💨
                     params={"advertisable": advertisable["eid"]},
                 )
-
-        campaigns = [
+        self.active_campaigns = [
             {
                 "eid": campaign["eid"],
                 "advertisable": campaign["advertisable"],
@@ -107,8 +107,6 @@ class AdRoll:
             }
             for campaign in campaigns
         ]
-
-        self.active_campaigns = campaigns
         return json.loads(json.dumps(campaigns), parse_int=str, parse_float=str)
 
     @backoff.on_exception(
@@ -164,6 +162,7 @@ class AdRoll:
                 sync_start_date=sync_start_date,
                 campaign_end_date=campaign_end_date,
             )
+            self.state = state
 
     def bulk_read_campaign_deliveries_from_dates(
         self,
@@ -260,7 +259,10 @@ class AdRoll:
             )
         except requests.exceptions.HTTPError as exc:
             if exc.response.status_code in [429]:
-                raise exceptions.AdrollAPIQuotaExceeded(exc)
+                LOGGER.error(exc)
+                LOGGER.info(self.state)
+                singer.write_state(self.state)
+                sys.exit(0)
             raise
 
     def __advance_bookmark(self, state, tap_stream_id, bookmark_key, bookmark_value):
