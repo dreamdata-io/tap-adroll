@@ -14,6 +14,7 @@ from singer import (
 from . import exceptions
 
 LOGGER = singer.get_logger()
+DELIVERIES_CHUNKS_WEEKS = 26  # 26 weeks is roughly 6 months
 
 
 def date_chunks(
@@ -174,7 +175,7 @@ class AdRoll:
     ):
         for start_date, end_date in date_chunks(
             start_date=sync_start_date,
-            increment=timedelta(weeks=26),
+            increment=timedelta(weeks=DELIVERIES_CHUNKS_WEEKS),
             maximum=campaign_end_date,
         ):
             eid = campaign["eid"]
