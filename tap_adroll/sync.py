@@ -7,10 +7,6 @@ from typing import Optional, List, Tuple
 from datetime import datetime, date, timedelta
 from dateutil import parser
 from ratelimit import limits, exception
-from singer import (
-    Transformer,
-    UNIX_MILLISECONDS_INTEGER_DATETIME_PARSING,
-)
 
 LOGGER = singer.get_logger()
 DELIVERIES_CHUNKS_WEEKS = 26  # 26 weeks is roughly 6 months
@@ -37,40 +33,31 @@ def date_chunks(
 class AdRoll:
     BASE_URL = "https://services.adroll.com/"
 
-    def __init__(self, config, state, catalog, limit=250):
+    def __init__(self, config, state, limit=250):
         self.SESSION = requests.Session()
         self.limit = limit
         self.access_token = config["access_token"]
         self.config = config
         self.state = state
-        self.catalog = catalog
         self.advertisables = None
-        self.transformer = Transformer(UNIX_MILLISECONDS_INTEGER_DATETIME_PARSING)
         self.active_campaigns = []
 
-    def sync(self):
+    def sync(self, streams):
         """ Sync data from tap source """
-        for stream in self.catalog.get_selected_streams(self.state):
-            LOGGER.info("Syncing stream:" + stream.tap_stream_id)
-            singer.write_schema(
-                stream_name=stream.tap_stream_id,
-                schema=stream.schema.to_dict(),
-                key_properties=stream.key_properties,
-            )
+        # TODO: pass the streams
+        for tap_stream_id in streams:
+            LOGGER.info("Syncing stream:" + tap_stream_id)
 
-            if stream.tap_stream_id == "deliveries":
-                self.sync_deliveries(stream)
+            if tap_stream_id == "deliveries":
+                self.sync_deliveries(tap_stream_id)
             else:
-                self.sync_full_table_streams(stream)
+                self.sync_full_table_streams(tap_stream_id)
 
         singer.write_state(self.state)
 
-    def sync_full_table_streams(self, stream):
-        for row in self.get_streams(stream.tap_stream_id):
-            record = self.transformer.transform(
-                row, stream.schema.to_dict(), stream.metadata[0]
-            )
-            singer.write_records(stream.tap_stream_id, [record])
+    def sync_full_table_streams(self, tap_stream_id):
+        for row in self.get_streams(tap_stream_id):
+            singer.write_records(tap_stream_id, [row])
 
     def get_streams(self, tap_stream_id):
         if tap_stream_id == "advertisables":
@@ -129,7 +116,7 @@ class AdRoll:
 
         return response_json["results"]
 
-    def sync_deliveries(self, stream):
+    def sync_deliveries(self, tap_stream_id):
         state = self.state
         for campaign in self.active_campaigns:
             eid = campaign.get("eid")
@@ -137,7 +124,9 @@ class AdRoll:
                 LOGGER.error(f"{campaign} has no attribute 'eid'")
                 continue
             # date of last sync, otherwise campaign start
-            sync_start_date = self.get_campaign_sync_start_date(stream, state, campaign)
+            sync_start_date = self.get_campaign_sync_start_date(
+                tap_stream_id, state, campaign
+            )
             # date of campaign end if ended, otherwise None
             campaign_end_date = self.get_campaign_end_date(campaign)
 
@@ -156,7 +145,7 @@ class AdRoll:
                 f"(syncing) campaign: {eid} start_date: {sync_start_date} end_date: {campaign_end_date}"
             )
             state = self.bulk_read_campaign_deliveries_from_dates(
-                stream=stream,
+                tap_stream_id=tap_stream_id,
                 state=state,
                 campaign=campaign,
                 sync_start_date=sync_start_date,
@@ -166,7 +155,7 @@ class AdRoll:
 
     def bulk_read_campaign_deliveries_from_dates(
         self,
-        stream,
+        tap_stream_id,
         state,
         campaign,
         sync_start_date,
@@ -183,12 +172,12 @@ class AdRoll:
             )
             api_result = self.get_campaign_deliveries(campaign, start_date, end_date)
             state = self.write_campaign_deliveries_records_and_advance_state(
-                stream, state, campaign, api_result
+                tap_stream_id, state, campaign, api_result
             )
 
         return state
 
-    def get_campaign_sync_start_date(self, stream, state, campaign):
+    def get_campaign_sync_start_date(self, tap_stream_id, state, campaign):
         """
             If we are able to find the date in bookmarks, we add one day to that date.
             We add one day, because the start_dates are previous end_dates for which we already have data
@@ -196,8 +185,8 @@ class AdRoll:
             and the next day we use it as start date, but we already have data for that day,
             so we need to set it to 2018-01-02
         """
-        if state and state.get("bookmarks", {}).get(stream.tap_stream_id, None):
-            synced_campaigns = state["bookmarks"][stream.tap_stream_id]
+        if state and state.get("bookmarks", {}).get(tap_stream_id, None):
+            synced_campaigns = state["bookmarks"][tap_stream_id]
             if synced_campaigns and synced_campaigns.get(campaign["eid"], None):
                 return datetime.strptime(
                     synced_campaigns[campaign["eid"]], "%Y-%m-%dT%H:%M:%S"
@@ -219,7 +208,7 @@ class AdRoll:
             )
 
     def write_campaign_deliveries_records_and_advance_state(
-        self, stream, state, campaign, api_result
+        self, tap_stream_id, state, campaign, api_result
     ):
         eid = campaign["eid"]
         advertisable_eid = campaign["advertisable"]
@@ -229,15 +218,12 @@ class AdRoll:
                 "advertisable_eid": advertisable_eid,
                 **summary,
             }
-            record = self.transformer.transform(
-                row, stream.schema.to_dict(), stream.metadata[0],
-            )
-            singer.write_records(stream.tap_stream_id, [record])
+            singer.write_records(tap_stream_id, [row])
 
         last_date_from_payload = api_result["date"][-1]["date"]
         return self.__advance_bookmark(
             state=state,
-            tap_stream_id=stream.tap_stream_id,
+            tap_stream_id=tap_stream_id,
             bookmark_key=eid,
             bookmark_value=datetime.strptime(
                 last_date_from_payload, "%Y-%m-%d"
